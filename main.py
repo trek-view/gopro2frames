@@ -282,7 +282,7 @@ class TrekviewProcessMp4():
             if os.path.exists(self.__folderName):
                 shutil.rmtree(self.__folderName)
             os.makedirs(self.__folderName, exist_ok=True) 
-            cmd = [self.__ffmpeg, "-i", self.__filename, "-r", "5", self.__folderName+os.sep+"img%d.jpg"]
+            cmd = [self.__ffmpeg, "-i", self.__filename, "-r", "5", "-q:v", "2" self.__folderName+os.sep+"img%d.jpg"]
             output = subprocess.run(cmd, capture_output=True)
             if output.returncode != 0: 
                 raise Exception(output)
