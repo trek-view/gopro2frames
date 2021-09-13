@@ -1,20 +1,63 @@
-import subprocess, json, argparse, platform, copy, os, re, shutil, shlex, time
+import subprocess, json, argparse, platform, copy, os, re, shutil, shlex, time, logging
 from datetime import datetime, timedelta
 from pathlib import Path
 from lxml import etree
 from os import walk
 
-class TrekviewPreProcess():
+class TrekviewCommand():
+
+    def _subprocess(self, command, sh=0):
+        logging.info('Executing subprocess')
+        ret = False
+        try:
+            cmd = command
+            if sh == 0:
+                cmd = shlex.split(" ".join(cmd))
+            output = subprocess.run(cmd, capture_output=True)
+            if output.returncode == 0:
+                ret = output
+            else:
+                raise Exception(output)
+        except Exception as e:
+            logging.error(e.stderr.decode('utf-8',"ignore"))
+            ret = None
+        except:
+            exit("Error:Please try again or check if `ExifTool`is installed or not.")
+        return ret
+
+    def _exiftool(self, command, sh=0):
+        logging.info("Starting Exiftool")
+        if platform.system() == "Windows":
+            exiftool = "exiftool.exe"
+        else:
+            exiftool = "exiftool"
+        command.insert(0, exiftool)
+        ret = self._subprocess(command, sh)
+        if ret == None:
+            exit("Error occured while executing exiftool.")
+        return ret
+
+    def _ffmpeg(self, command, sh=0):
+        logging.info("Starting Ffmpeg")
+        if platform.system() == "Windows":
+            ffmpeg = "ffmpeg.exe"
+        else:
+            ffmpeg = "ffmpeg"
+        command.insert(0, ffmpeg)
+        ret = self._subprocess(command, sh)
+        if ret == None:
+            exit("Error occured while executing exiftool, please see logs for more info.")
+        return ret
+
+class TrekviewPreProcess(TrekviewCommand):
+    _TimeWrap = False
     """
         init function
         It checks if the video file is valid or not.
         If the video file is valid then it will execute exiftool to get the metadata
     """
     def __init__(self, filename):
-        if platform.system() == "Windows":
-            self.__exiftool = "exiftool.exe"
-        else:
-            self.__exiftool = "exiftool"
+        logging.info('Strarting Pre Process')
         filecheck = self.checkFileExists(filename)
         if filecheck == True:
             self.__filename = filename
@@ -28,6 +71,7 @@ class TrekviewPreProcess():
         return (True|False)
     """
     def checkFileExists(self, filename):
+        logging.info("Checking If file exists {}".format(filename))
         try:
             video_file = Path(filename)
             if video_file.is_file():
@@ -42,21 +86,14 @@ class TrekviewPreProcess():
         It will run exiftool to get all the data that is required for pre-process-1
     """            
     def preProcessExifToolExecute(self):
-        try:
-            cmd = [self.__exiftool, "-ee", "-j", "-DeviceName", "-ProjectionType", "-MetaFormat", "-StitchingSoftware", "-VideoFrameRate", self.__filename]
-            output = subprocess.run(cmd, capture_output=True)
-            if output.returncode == 0:
-                self.__exifPreProcessData = json.loads(output.stdout.decode('utf-8',"ignore"))
-                if len(self.__exifPreProcessData) > 0:
-                    self.__exifPreProcessData = self.__exifPreProcessData[0]
-                else:
-                    exit("Data not available")
-            else:
-                raise Exception(output)
-        except Exception as e:
-            exit("Error: {}".format( e.stderr.decode('utf-8',"ignore")))
-        except:
-            exit("Error:Please try again or check if `ExifTool`is installed or not.")
+        logging.info("Getting Pre Process Info")
+        cmd = ["-ee", "-j", "-DeviceName", "-ProjectionType", "-MetaFormat", "-StitchingSoftware", "-VideoFrameRate", self.__filename]
+        output = self._exiftool(cmd)
+        self.__exifPreProcessData = json.loads(output.stdout.decode('utf-8',"ignore"))
+        if len(self.__exifPreProcessData) > 0:
+            self.__exifPreProcessData = self.__exifPreProcessData[0]
+        else:
+            exit("Data not available")
 
     """
         getPreProcessData function
@@ -64,6 +101,7 @@ class TrekviewPreProcess():
         return (Object)
     """  
     def getPreProcessData(self):
+        logging.info("Getting Pre Process Data")
         return copy.deepcopy(self.__exifPreProcessData)
 
     """
@@ -72,6 +110,7 @@ class TrekviewPreProcess():
         return (True|False)
     """  
     def checkProjectionType(self):
+        logging.info("Checking Pre Process Projection Type")
         if 'ProjectionType' in self.__exifPreProcessData:
             if self.__exifPreProcessData['ProjectionType'] == 'equirectangular':
                 return True
@@ -85,6 +124,7 @@ class TrekviewPreProcess():
         return (True|False)
     """  
     def checkDeviceName(self):
+        logging.info("Checking Pre Process Device Name")
         devices = ["Fusion", "GoPro Max"]
         if 'DeviceName' in self.__exifPreProcessData:
             if self.__exifPreProcessData['DeviceName'] in devices:
@@ -100,6 +140,7 @@ class TrekviewPreProcess():
         return (True|False)
     """  
     def checkMetaFormat(self):
+        logging.info("Checking Pre Process Meta Format")
         if 'MetaFormat' in self.__exifPreProcessData:
             if self.__exifPreProcessData['MetaFormat'] == "gpmd":
                 return True
@@ -113,6 +154,7 @@ class TrekviewPreProcess():
         return (True|False)
     """ 
     def checkStitchingSoftware(self):
+        logging.info("Checking Pre Process Stitching Software")
         softwares = ["Fusion Studio / GStreamer", "Spherical Metadata Tool"]
         if 'StitchingSoftware' in self.__exifPreProcessData:
             if self.__exifPreProcessData['StitchingSoftware'] in softwares:
@@ -127,6 +169,7 @@ class TrekviewPreProcess():
         return (True|False)
     """ 
     def checkVideoFrameRate(self):
+        logging.info("Checking Pre Process Video FrameRate")
         if 'VideoFrameRate' in self.__exifPreProcessData:
             if self.__exifPreProcessData['VideoFrameRate'] > 5:
                 return True
@@ -140,6 +183,8 @@ class TrekviewPreProcess():
         returns a variable which contains all the error information. (Object)
     """ 
     def validatePreProcessData(self):
+        _TimeWrap = False
+        logging.info("Validate Pre Process Video")
         errors = {
             "hasErrors":None,
             "criticalErrors":None,
@@ -216,6 +261,7 @@ class TrekviewPreProcess():
             
         if metaformat is True and (self.__device == "GoPro Max"):
             errors['non_critical']['metaFormatMax']['errorStatus'] = True
+            _TimeWrap = True
         else:
             errors['non_critical']['metaFormatMax']['errorStatus'] = False
             errors['nonCriticalErrors'] = True
@@ -225,8 +271,10 @@ class TrekviewPreProcess():
             
         return errors
 
-class TrekviewProcessMp4():
-    def __init__(self, filename):
+class TrekviewProcessMp4(TrekviewCommand):
+    def __init__(self, filename, data):
+        self._Timewrap = data
+        logging.info("Starting Mp4 Process")
         if platform.system() == "Windows":
             self.__exiftool = "exiftool.exe"
         else:
@@ -249,6 +297,7 @@ class TrekviewProcessMp4():
         return (True|False)
     """
     def checkFileExists(self, filename):
+        logging.info("Checking if file exists")
         try:
             video_file = Path(filename)
             if video_file.is_file():
@@ -259,30 +308,28 @@ class TrekviewProcessMp4():
             return False
 
     def extractMetaData(self):
+        logging.info("Extracting Vide Meta Data")
         xmlFile = os.getcwd() + os.sep + 'VIDEO_META.xml'
-        try:
-            cmd = [self.__exiftool, "-ee", "-G3", "-api", "LargeFileSupport=1", "-X", self.__filename]
-            output = subprocess.run(cmd, capture_output=True)
-            if output.returncode == 0:
-                with open(xmlFile, "w") as f:
-                    self.__xmlOutput = output.stdout
-                    f.write(self.__xmlOutput.decode('utf-8'))  
-            else:
-                raise Exception(output)
-        except Exception as e:
-            exit("Error: {}".format( e.stderr.decode('utf-8',"ignore")))
-        except:
-            exit("Error occurred. Please try again or check if `ExifTool`is installed or not.")
+        cmd = ["-ee", "-G3", "-api", "LargeFileSupport=1", "-X", self.__filename]
+        output = self._exiftool(cmd)
+        with open(xmlFile, "w") as f:
+            self.__xmlOutput = output.stdout
+            f.write(self.__xmlOutput.decode('utf-8'))  
 
     def breakIntoFrames(self):
+        logging.info('Start breaking frames')
         self.__folderName = os.getcwd() + os.sep + "Img"
         root = etree.fromstring(self.__xmlOutput)
-        DTO = root.xpath('.//Track3:GPSDateTime', namespaces = {'Track3':'http://ns.exiftool.org/QuickTime/Track3/1.0/'})
+        if self._Timewrap == True:
+            Track = "Track2"
+        else:
+            Track = "Track3"
+        DTO = root.xpath('.//'+Track+':GPSDateTime', namespaces = {Track:'http://ns.exiftool.org/QuickTime/'+Track+'/1.0/'})
         try:
             if os.path.exists(self.__folderName):
                 shutil.rmtree(self.__folderName)
             os.makedirs(self.__folderName, exist_ok=True) 
-            cmd = [self.__ffmpeg, "-i", self.__filename, "-r", "5", "-q:v", "2" self.__folderName+os.sep+"img%d.jpg"]
+            cmd = [self.__ffmpeg, "-i", self.__filename, "-r", "5", self.__folderName+os.sep+"img%d.jpg"]
             output = subprocess.run(cmd, capture_output=True)
             if output.returncode != 0: 
                 raise Exception(output)
@@ -295,7 +342,6 @@ class TrekviewProcessMp4():
                     cmd = shlex.split(self.__exiftool+" '-DateTimeOriginal+<0:0:${filesequence;$_*=0.2}' "+self.__folderName)
                     output = subprocess.run(cmd, capture_output=True)
                     if output.returncode == 0:
-                        print(output.stdout.decode('utf-8'))
                         for img in images:
                             try:
                                 cmd = [self.__exiftool, "-ee", "-j", "-DateTimeOriginal", self.__folderName+os.sep+img]
@@ -310,7 +356,6 @@ class TrekviewProcessMp4():
                                             btd = time.strptime(img_dateTimeOriginal, "%Y:%m:%d %H:%M:%S")
                                             if (btd <= atd) == True:
                                                 _match = True
-                                                print(_val.text, img_dateTimeOriginal, btd <= atd)
                                                 self.getGPSValues(_val, self.__folderName+os.sep+img)
                                                 break
                                         if _match == False:
@@ -335,6 +380,7 @@ class TrekviewProcessMp4():
             exit("Error occurred. Please try again or check if `Ffmpeg`is installed or not.")
 
     def getSphericalMetaData(self, root):
+        logging.info("Getting Spherical Meta Data")
         data = {}
         nsGSpherical = {"XMP-GSpherical":'http://ns.exiftool.org/XMP/XMP-GSpherical/1.0/'}
         nsTrack1 = {"Track1":'http://ns.exiftool.org/QuickTime/Track1/1.0/'}
@@ -419,11 +465,16 @@ class TrekviewProcessMp4():
         return data
 
     def getAdditionalMetaData(self, root):
+        logging.info("Getting Additional Meta Data")
         data = {}
-        ns = {"Track3":'http://ns.exiftool.org/QuickTime/Track3/1.0/'}
+        if self._Timewrap == True:
+            Track = "Track2"
+        else:
+            Track = "Track3"
+        ns = {Track:'http://ns.exiftool.org/QuickTime/'+Track+'/1.0/'}
         metadata = [
             {
-                "video":"Track3:DeviceName",
+                "video":Track+":DeviceName",
                 "image":"IFD0:Model",
                 "value":""
             },
@@ -440,10 +491,14 @@ class TrekviewProcessMp4():
         return data
 
     def getGPSValues(self, root, image):
+        logging.info("Getting GPS Value Data")
         data = {}
         nsTrack2 = {"Track2":'http://ns.exiftool.org/QuickTime/Track2/1.0/'}
         nsTrack3 = {"Track3":'http://ns.exiftool.org/QuickTime/Track3/1.0/'}
-        Track = "Track3"
+        if self._Timewrap == True:
+            Track = "Track2"
+        else:
+            Track = "Track3"
         if Track == "Track3":
             ns = nsTrack3
         else:
@@ -484,13 +539,14 @@ class TrekviewProcessMp4():
             for i in metadata:
                 if i["video"] != "":
                     try:
-                        if i["video"] == "Track3:"+name:
+                        if i["video"] == Track+":"+name:
                             value = root.text
                             value = value.split(" ")
                             ref = value.pop()
-                            data[i["image"][0]] = " ".join(value)
+
+                            data[i["image"][0]] = "\""+" ".join(value)+"\""
                             if( i["image"][1] =="GPS:GPSAltitudeRef"):
-                                data[i["image"][1]] = "Above Sea Level"
+                                data[i["image"][1]] = "\"Above Sea Level\""
                             else:
                                 data[i["image"][1]] = "\""+ref+"\""
                             _check = _check+1
@@ -502,29 +558,23 @@ class TrekviewProcessMp4():
             if _limit > 1000:
                 break
         if len(data) > 1:
-            cmd = [self.__exiftool] 
+            cmd = [] 
             for flag in [data]:
                 for key, value in flag.items():
                     cmd.append("-"+key+"="+value)
-            try:
-                cmd.append(image)
-                output = subprocess.run(cmd, capture_output=True)
-                if output.returncode == 0:
-                    print("Image: {} {}".format(image, output.stdout.decode('utf-8',"ignore")))
-                    print("{}".format( output.stderr.decode('utf-8',"ignore")))
-                else:
-                    raise Exception(output)
-            except Exception as e:
-                exit("Error: {}".format( e.stderr.decode('utf-8',"ignore")))
-            except:
-                exit("Error occurred. Please try again or check if `ExifTool`is installed or not.")
-
+            cmd.append(image)
+            output = self._exiftool(cmd, 1)
         return True
 
     def getDateTimeFirstImageMetaData(self, root):
+        logging.info("Getting DateTime First Image Meta Data")
         data = {}
-        ns = {"Track3":'http://ns.exiftool.org/QuickTime/Track3/1.0/'}
-        el = root.find('.//Track3:GPSDateTime', namespaces = ns)
+        if self._Timewrap == True:
+            Track = "Track2"
+        else:
+            Track = "Track3"
+        ns = {Track:'http://ns.exiftool.org/QuickTime/'+Track+'/1.0/'}
+        el = root.find('.//'+Track+':GPSDateTime', namespaces = ns)
         dateTimeLocalName = el.xpath('local-name()')
         dateTimeValue = el.text.split('.')
         if len(dateTimeValue) > 1:
@@ -535,48 +585,32 @@ class TrekviewProcessMp4():
         return data
     
     def injectDateTimeMetadata(self, img, root):
+        logging.info("Injecting Date Time Meta data")
         image1     = self.getDateTimeFirstImageMetaData(root)
-        cmd = [self.__exiftool] 
+        cmd = [] 
         for flag in [image1]:
             for key, value in flag.items():
-                cmd.append("-"+key+"="+value)
-        try:
-            cmd.append(img)
-            output = subprocess.run(cmd, capture_output=True)
-            if output.returncode == 0:
-                print("Image: {} {}".format(img, output.stdout.decode('utf-8',"ignore")))
-                print("{}".format( output.stderr.decode('utf-8',"ignore")))
-            else:
-                raise Exception(output)
-        except Exception as e:
-            exit("Error: {}".format( e.stderr.decode('utf-8',"ignore")))
-        except:
-            exit("Error occurred. Please try again or check if `ExifTool`is installed or not.")
+                cmd.append("-"+key+"=\""+value+"\"")
+        cmd.append(img)
+        output = self._exiftool(cmd)
+    
     def injectMetadata(self, root):
+        logging.info('Injecting metadata Spherical & additional')
         spherical  = self.getSphericalMetaData(root)
         additional = self.getAdditionalMetaData(root)
         data = [
             spherical,
             additional
         ]
-        cmd = [self.__exiftool] 
+        cmd = [] 
         for flag in data:
             for key, value in flag.items():
                 cmd.append("-"+key+"="+value)
-        try:
-            cmd.append(self.__folderName)
-            output = subprocess.run(cmd, capture_output=True)
-            if output.returncode == 0:
-                print("Image: {}".format(output.stdout.decode('utf-8',"ignore")))
-                print("{}".format( output.stderr.decode('utf-8',"ignore")))
-            else:
-                raise Exception(output)
-        except Exception as e:
-            exit("Error: {}".format( e.stderr.decode('utf-8',"ignore")))
-        except:
-            exit("Error occurred. Please try again or check if `ExifTool`is installed or not.")
+        cmd.append(self.__folderName)
+        output = self._exiftool(cmd, 1)
 
 def printErrors(errors):
+    logging.info("Printing Critical/Non-Critical Errors")
     if errors["hasErrors"] == True:
         if errors["criticalErrors"] == True:
             for k, v in errors["critical"].items():
@@ -594,11 +628,15 @@ if __name__ == '__main__':
     parser.add_argument("-i", "--input", type=str, help="Please input a valid video file.")
     args = parser.parse_args()
     if (args.input is not None):
+        logging.basicConfig(format='%(asctime)s %(levelname)s: LineNo:%(lineno)d %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.DEBUG)
+        logging.info('Script started for file {}'.format(args.input))
         preProcess = TrekviewPreProcess(args.input)
+        data = preProcess.getPreProcessData()
+        data["Timewrap"] = preProcess._TimeWrap
         preProcessValidated = preProcess.validatePreProcessData()
         printErrors(preProcessValidated)
-        mp4Video = TrekviewProcessMp4(args.input)
+        mp4Video = TrekviewProcessMp4(args.input, data)
         print(preProcess.getPreProcessData())
         printErrors(preProcessValidated)
-        print("Done! You can now see your images in Img filder.")
+        print("Done! You can now see your images in Img folder.")
         
