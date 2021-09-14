@@ -320,11 +320,13 @@ class TrekviewProcessMp4(TrekviewCommand):
         logging.info('Start breaking frames')
         self.__folderName = os.getcwd() + os.sep + "Img"
         root = etree.fromstring(self.__xmlOutput)
+        print('XMLOutput: ', root)
         if self._Timewrap == True:
             Track = "Track2"
         else:
             Track = "Track3"
         DTO = root.xpath('.//'+Track+':GPSDateTime', namespaces = {Track:'http://ns.exiftool.org/QuickTime/'+Track+'/1.0/'})
+        print('DTO:GPSDateTime: ', DTO)
         try:
             if os.path.exists(self.__folderName):
                 shutil.rmtree(self.__folderName)
@@ -336,41 +338,43 @@ class TrekviewProcessMp4(TrekviewCommand):
             else:
                 images = next(walk(self.__folderName), (None, None, []))[2]
                 for img in images:
-                    self.injectDateTimeMetadata(self.__folderName+os.sep+img, root)
-
-                try:
-                    cmd = shlex.split(self.__exiftool+" '-DateTimeOriginal+<0:0:${filesequence;$_*=0.2}' "+self.__folderName)
-                    output = subprocess.run(cmd, capture_output=True)
-                    if output.returncode == 0:
-                        for img in images:
-                            try:
-                                cmd = [self.__exiftool, "-ee", "-j", "-DateTimeOriginal", self.__folderName+os.sep+img]
-                                output = subprocess.run(cmd, capture_output=True)
-                                if output.returncode == 0:
-                                    img_dateTimeOriginal= json.loads(output.stdout.decode('utf-8',"ignore"))
-                                    if len(img_dateTimeOriginal) > 0:
-                                        img_dateTimeOriginal = img_dateTimeOriginal[0]["DateTimeOriginal"]
-                                        for _val in DTO:
-                                            _match = False
-                                            atd = time.strptime(_val.text, "%Y:%m:%d %H:%M:%S.%f")
-                                            btd = time.strptime(img_dateTimeOriginal, "%Y:%m:%d %H:%M:%S")
-                                            if (btd <= atd) == True:
-                                                _match = True
-                                                self.getGPSValues(_val, self.__folderName+os.sep+img)
-                                                break
-                                        if _match == False:
-                                            self.getGPSValues(DTO[-1], self.__folderName+os.sep+img)
-                                else:
-                                    raise Exception(output)
-                            except Exception as e:
-                                exit("Error: {}".format( e.stderr.decode('utf-8',"ignore")))
-                            except:
-                                exit("Error:Please try again or check if `ExifTool`is installed or not.")
-                    self.injectMetadata(root)
-                except Exception as e:
-                    exit( e.stderr.decode('utf-8',"ignore"))
-                except:
-                    exit("Error occurred. Please try again or check if `ExifTool`is installed or not.")
+                    iDM = self.injectDateTimeMetadata(self.__folderName+os.sep+img, root)
+                    if iDM == None:
+                        logging.error('Unable to get GPS Date Time for file: {}'.format(self.__folderName+os.sep+img))
+                if iDM != None:
+                    try:
+                        cmd = shlex.split(self.__exiftool+" '-DateTimeOriginal+<0:0:${filesequence;$_*=0.2}' "+self.__folderName)
+                        output = subprocess.run(cmd, capture_output=True)
+                        if output.returncode == 0:
+                            for img in images:
+                                try:
+                                    cmd = [self.__exiftool, "-ee", "-j", "-DateTimeOriginal", self.__folderName+os.sep+img]
+                                    output = subprocess.run(cmd, capture_output=True)
+                                    if output.returncode == 0:
+                                        img_dateTimeOriginal= json.loads(output.stdout.decode('utf-8',"ignore"))
+                                        if len(img_dateTimeOriginal) > 0:
+                                            img_dateTimeOriginal = img_dateTimeOriginal[0]["DateTimeOriginal"]
+                                            for _val in DTO:
+                                                _match = False
+                                                atd = time.strptime(_val.text, "%Y:%m:%d %H:%M:%S.%f")
+                                                btd = time.strptime(img_dateTimeOriginal, "%Y:%m:%d %H:%M:%S")
+                                                if (btd <= atd) == True:
+                                                    _match = True
+                                                    self.getGPSValues(_val, self.__folderName+os.sep+img)
+                                                    break
+                                            if _match == False:
+                                                self.getGPSValues(DTO[-1], self.__folderName+os.sep+img)
+                                    else:
+                                        raise Exception(output)
+                                except Exception as e:
+                                    exit("Error: {}".format( e.stderr.decode('utf-8',"ignore")))
+                                except:
+                                    exit("Error:Please try again or check if `ExifTool`is installed or not.")
+                        self.injectMetadata(root)
+                    except Exception as e:
+                        exit( e.stderr.decode('utf-8',"ignore"))
+                    except:
+                        exit("Error occurred. Please try again or check if `ExifTool`is installed or not.")
 
 
 
@@ -378,6 +382,8 @@ class TrekviewProcessMp4(TrekviewCommand):
             exit("Error: {}".format( e.stderr.decode('utf-8',"ignore")))
         except:
             exit("Error occurred. Please try again or check if `Ffmpeg`is installed or not.")
+        if iDM == None:
+            exit("Unable to get GPS DateTime")
 
     def getSphericalMetaData(self, root):
         logging.info("Getting Spherical Meta Data")
@@ -568,31 +574,39 @@ class TrekviewProcessMp4(TrekviewCommand):
 
     def getDateTimeFirstImageMetaData(self, root):
         logging.info("Getting DateTime First Image Meta Data")
-        data = {}
-        if self._Timewrap == True:
-            Track = "Track2"
-        else:
-            Track = "Track3"
-        ns = {Track:'http://ns.exiftool.org/QuickTime/'+Track+'/1.0/'}
-        el = root.find('.//'+Track+':GPSDateTime', namespaces = ns)
-        dateTimeLocalName = el.xpath('local-name()')
-        dateTimeValue = el.text.split('.')
-        if len(dateTimeValue) > 1:
-            DateTimeOriginal = dateTimeValue[0]+"Z"
-            SubSecTimeOriginal = dateTimeValue[1]
-            SubSecDateTimeOriginal = dateTimeValue[0]+"."+dateTimeValue[1]+"Z"
-            data = {"DateTimeOriginal":DateTimeOriginal, "SubSecTimeOriginal":SubSecTimeOriginal, "SubSecDateTimeOriginal":SubSecDateTimeOriginal}
+        try:
+            data = {}
+            if self._Timewrap == True:
+                Track = "Track2"
+            else:
+                Track = "Track3"
+            ns = {Track:'http://ns.exiftool.org/QuickTime/'+Track+'/1.0/'}
+            if root == None:
+                return None
+            el = root.find('.//'+Track+':GPSDateTime', namespaces = ns)
+            dateTimeLocalName = el.xpath('local-name()')
+            dateTimeValue = el.text.split('.')
+            if len(dateTimeValue) > 1:
+                DateTimeOriginal = dateTimeValue[0]+"Z"
+                SubSecTimeOriginal = dateTimeValue[1]
+                SubSecDateTimeOriginal = dateTimeValue[0]+"."+dateTimeValue[1]+"Z"
+                data = {"DateTimeOriginal":DateTimeOriginal, "SubSecTimeOriginal":SubSecTimeOriginal, "SubSecDateTimeOriginal":SubSecDateTimeOriginal}
+        except:
+            return None
         return data
     
     def injectDateTimeMetadata(self, img, root):
         logging.info("Injecting Date Time Meta data")
         image1     = self.getDateTimeFirstImageMetaData(root)
+        if image1 == None:
+            return None
         cmd = [] 
         for flag in [image1]:
             for key, value in flag.items():
                 cmd.append("-"+key+"=\""+value+"\"")
         cmd.append(img)
         output = self._exiftool(cmd)
+        return output
     
     def injectMetadata(self, root):
         logging.info('Injecting metadata Spherical & additional')
@@ -628,15 +642,16 @@ if __name__ == '__main__':
     parser.add_argument("-i", "--input", type=str, help="Please input a valid video file.")
     args = parser.parse_args()
     if (args.input is not None):
-        logging.basicConfig(format='%(asctime)s %(levelname)s: LineNo:%(lineno)d %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.DEBUG)
+        logging.basicConfig(filename='trekview-gopro.log', format='%(asctime)s %(levelname)s: LineNo:%(lineno)d %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.DEBUG)
         logging.info('Script started for file {}'.format(args.input))
         preProcess = TrekviewPreProcess(args.input)
         data = preProcess.getPreProcessData()
         data["Timewrap"] = preProcess._TimeWrap
         preProcessValidated = preProcess.validatePreProcessData()
+        print(data)
         printErrors(preProcessValidated)
         mp4Video = TrekviewProcessMp4(args.input, data)
-        print(preProcess.getPreProcessData())
+        print(data)
         printErrors(preProcessValidated)
         print("Done! You can now see your images in Img folder.")
         
