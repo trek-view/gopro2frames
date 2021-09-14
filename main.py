@@ -442,7 +442,7 @@ class TrekviewProcessMp4(TrekviewCommand):
             {
                 "video":"",
                 "image":"XMP-GPano:SourcePhotosCount",
-                "value":"2"
+                "value":2
             },
             {
                 "video":"",
@@ -479,19 +479,18 @@ class TrekviewProcessMp4(TrekviewCommand):
             {
                 "video":"",
                 "image":"XMP-GPano:CroppedAreaLeftPixels",
-                "value":"0"
+                "value":0
             },
             {
                 "video":"",
                 "image":"XMP-GPano:CroppedAreaTopPixels",
-                "value":"0"
+                "value":0
             },
         ]
 
         for i in GSpherical:
             if i["video"] != "":
                 try:
-                    print(i["video"], jsonData["Main:"+i["video"]])
                     data[i["image"]] = jsonData["Main:"+i["video"]]
                 except:
                     """"""
@@ -540,18 +539,27 @@ class TrekviewProcessMp4(TrekviewCommand):
         ]
         _data = {}
         for mdata in metadata:
-            if mdata["video"] == "GPSDateTime":
-                continue
             value = data[mdata["video"]]
             value = value.split(" ")
-            if mdata["video"] != "GPSAltitude":
-                ref = value.pop()
-
-            _data[mdata["image"][0]] = "\""+" ".join(value)+"\""
+            if mdata["video"] == "GPSDateTime":
+                _data[mdata["image"][0]] = "\""+value[0]+"\""
+                _data[mdata["image"][1]] = "\""+value[1]+"\""
+                continue
+            ref = value.pop()
+            value.append(ref)
+            
             if( mdata["image"][1] =="GPS:GPSAltitudeRef"):
                 _data[mdata["image"][1]] = "\"Above Sea Level\""
+            elif( mdata["image"][1] =="GPS:GPSLatitudeRef"):
+                ref = self.latLongLocation(ref)
+                _data[mdata["image"][1]] = "\""+ref+"\""
+            elif( mdata["image"][1] =="GPS:GPSLongitudeRef"):
+                ref = self.latLongLocation(ref)
+                _data[mdata["image"][1]] = "\""+ref+"\""
             else:
                 _data[mdata["image"][1]] = "\""+ref+"\""
+
+            _data[mdata["image"][0]] = "\""+" ".join(value)+"\""
         data = _data
         if len(data) > 1:
             cmd = [] 
@@ -563,6 +571,14 @@ class TrekviewProcessMp4(TrekviewCommand):
             output = self._exiftool(['-ee', '-GPS:GPSAltitudeRef="Above Sea Level"', image])
         return True
 
+    def latLongLocation(self, x):
+        return {
+            'E': "East",
+            'W': "West",
+            'N': "North",
+            'S': "South"
+        }.get(x, "") 
+    
     def getDateTimeFirstImageMetaData(self, data):
         logging.info("Getting DateTime First Image Meta Data")
         image1 = None
@@ -602,7 +618,10 @@ class TrekviewProcessMp4(TrekviewCommand):
         cmd = [] 
         for flag in data:
             for key, value in flag.items():
-                cmd.append("-"+key+"=\""+str(value)+"\"")
+                if (type(value) == int) or (type(value) == float):
+                    cmd.append("-"+key+"="+str(value))
+                else:
+                    cmd.append("-"+key+"=\""+str(value)+"\"")
         cmd.append(self.__folderName)
         output = self._exiftool(cmd, 1)
 
