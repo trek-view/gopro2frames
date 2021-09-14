@@ -327,6 +327,9 @@ class TrekviewProcessMp4(TrekviewCommand):
             Track = "Track3"
         DTO = root.xpath('.//'+Track+':GPSDateTime', namespaces = {Track:'http://ns.exiftool.org/QuickTime/'+Track+'/1.0/'})
         print('DTO:GPSDateTime: ', DTO)
+        jDTO = self.parseJsonForGPS()
+        print(jDTO)
+        exit()
         try:
             if os.path.exists(self.__folderName):
                 shutil.rmtree(self.__folderName)
@@ -385,243 +388,273 @@ class TrekviewProcessMp4(TrekviewCommand):
         if iDM == None:
             exit("Unable to get GPS DateTime")
 
-    def getSphericalMetaData(self, root):
-        logging.info("Getting Spherical Meta Data")
-        data = {}
-        nsGSpherical = {"XMP-GSpherical":'http://ns.exiftool.org/XMP/XMP-GSpherical/1.0/'}
-        nsTrack1 = {"Track1":'http://ns.exiftool.org/QuickTime/Track1/1.0/'}
-        GSpherical = [
-            {
-                "video":"XMP-GSpherical:StitchingSoftware",
-                "image":"XMP-GPano:StitchingSoftware",
-                "value":""
-            },
-            {
-                "video":"",
-                "image":"XMP-GPano:SourcePhotosCount",
-                "value":"2"
-            },
-            {
-                "video":"",
-                "image":"XMP-GPano:UsePanoramaViewer",
-                "value":"true"
-            },
-            {
-                "video":"XMP-GSpherical:ProjectionType",
-                "image":"XMP-GPano:ProjectionType",
-                "value":""
-            },
-        ]
-        Track = [
-            {
-                "video":"Track1:SourceImageHeight",
-                "image":"XMP-GPano:CroppedAreaImageHeightPixels",
-                "value":""
-            },
-            {
-                "video":"Track1:SourceImageWidth",
-                "image":"XMP-GPano:CroppedAreaImageWidthPixels",
-                "value":""
-            },
-            {
-                "video":"Track1:SourceImageHeight",
-                "image":"XMP-GPano:FullPanoHeightPixels",
-                "value":""
-            },
-            {
-                "video":"Track1:SourceImageWidth",
-                "image":"XMP-GPano:FullPanoWidthPixels",
-                "value":""
-            },
-            {
-                "video":"",
-                "image":"XMP-GPano:CroppedAreaLeftPixels",
-                "value":"0"
-            },
-            {
-                "video":"",
-                "image":"XMP-GPano:CroppedAreaTopPixels",
-                "value":"0"
-            },
-        ]
+    def parseJsonForGPS(self):
+        output = self._exiftool(["-ee", "-G3", "-api", "LargeFileSupport=1", "-j", self.__filename])
+        jsonData = json.loads(output.stdout.decode('utf-8',"ignore"))
 
-        for i in GSpherical:
-            if i["video"] != "":
-                try:
-                    el = root.find('.//'+str(i["video"]), namespaces = nsGSpherical)
-                    name = el.xpath('local-name()')
-                    value = el.text
-                    data[i["image"]] = value
-                except:
-                    """"""
-            else:
-                data[i["image"]] = i["value"]
-
-        for i in Track:
-            if i["video"] != "":
-                try:
-                    el = root.find('.//'+str(i["video"]), namespaces = nsTrack1)
-                    name = el.xpath('local-name()')
-                    value = el.text
-                    data[i["image"]] = value
-                except:
-                    """"""
-            else:
-                data[i["image"]] = i["value"]
-        return data
-
-    def getAdditionalMetaData(self, root):
-        logging.info("Getting Additional Meta Data")
-        data = {}
-        if self._Timewrap == True:
-            Track = "Track2"
+        if len(jsonData) > 0:
+            jsonData = jsonData[0]
         else:
-            Track = "Track3"
-        ns = {Track:'http://ns.exiftool.org/QuickTime/'+Track+'/1.0/'}
-        metadata = [
-            {
-                "video":Track+":DeviceName",
-                "image":"IFD0:Model",
-                "value":""
-            },
-        ]
-        for i in metadata:
-            if i["video"] != "":
-                try:
-                    el = root.find('.//'+str(i["video"]), namespaces = ns)
-                    name = el.xpath('local-name()')
-                    value = el.text
-                    data[i["image"]] = value
-                except:
-                    """"""
-        return data
+            return None
+            
+        gpsDataString = []
+        gpsData = {}
+        for k,v in jsonData.items():
+            data = k.split(":")
+            if len(data) > 1:
+                if data[1] == "GPSDateTime":
+                    gpsDataString.append(k)
+        for gpsString in gpsDataString:
+            g1Data = gpsString.split(":")
+            for k,v in jsonData.items():
+                g2Data = k.split(":")
+                if len(g2Data) > 1:
+                    if g1Data[0] == g2Data[0]:
+                        if g1Data[0] in gpsData:
+                            if g2Data[1] in ["GPSAltitude", "GPSLongitude", "GPSLatitude", "GPSDateTime"]:
+                                gpsData[g1Data[0]].append({g2Data[1]:v})
+                        else:
+                            gpsData[g1Data[0]] = []
 
-    def getGPSValues(self, root, image):
-        logging.info("Getting GPS Value Data")
-        data = {}
-        nsTrack2 = {"Track2":'http://ns.exiftool.org/QuickTime/Track2/1.0/'}
-        nsTrack3 = {"Track3":'http://ns.exiftool.org/QuickTime/Track3/1.0/'}
-        if self._Timewrap == True:
-            Track = "Track2"
-        else:
-            Track = "Track3"
-        if Track == "Track3":
-            ns = nsTrack3
-        else:
-            ns = nsTrack2
-        metadata = [
-            {
-                "video":Track+":GPSDateTime",
-                "image":["GPS:GPSDateStamp", "GPS:GPSTimeStamp"],
-                "value":""
-            },
-            {
-                "video":Track+":GPSLatitude",
-                "image":["GPS:GPSLatitude", "GPS:GPSLatitudeRef"],
-                "value":""
-            },
-            {
-                "video":Track+":GPSLongitude",
-                "image":["GPS:GPSLongitude", "GPS:GPSLongitudeRef"],
-                "value":""
-            },
-            {
-                "video":Track+":GPSAltitude",
-                "image":["GPS:GPSAltitude", "GPS:GPSAltitudeRef"],
-                "value":""
-            },
-        ]
-        _check = 0
-        _limit = 0
-        while True:
-            if root == None:
-                break
-            root = root.getnext()
-            if root == None:
-                break
-            name = root.xpath('local-name()')
-            if name == "GPSDateTime":
-                break
-            for i in metadata:
+        return gpsData
+
+        def getSphericalMetaData(self, root):
+            logging.info("Getting Spherical Meta Data")
+            data = {}
+            nsGSpherical = {"XMP-GSpherical":'http://ns.exiftool.org/XMP/XMP-GSpherical/1.0/'}
+            nsTrack1 = {"Track1":'http://ns.exiftool.org/QuickTime/Track1/1.0/'}
+            GSpherical = [
+                {
+                    "video":"XMP-GSpherical:StitchingSoftware",
+                    "image":"XMP-GPano:StitchingSoftware",
+                    "value":""
+                },
+                {
+                    "video":"",
+                    "image":"XMP-GPano:SourcePhotosCount",
+                    "value":"2"
+                },
+                {
+                    "video":"",
+                    "image":"XMP-GPano:UsePanoramaViewer",
+                    "value":"true"
+                },
+                {
+                    "video":"XMP-GSpherical:ProjectionType",
+                    "image":"XMP-GPano:ProjectionType",
+                    "value":""
+                },
+            ]
+            Track = [
+                {
+                    "video":"Track1:SourceImageHeight",
+                    "image":"XMP-GPano:CroppedAreaImageHeightPixels",
+                    "value":""
+                },
+                {
+                    "video":"Track1:SourceImageWidth",
+                    "image":"XMP-GPano:CroppedAreaImageWidthPixels",
+                    "value":""
+                },
+                {
+                    "video":"Track1:SourceImageHeight",
+                    "image":"XMP-GPano:FullPanoHeightPixels",
+                    "value":""
+                },
+                {
+                    "video":"Track1:SourceImageWidth",
+                    "image":"XMP-GPano:FullPanoWidthPixels",
+                    "value":""
+                },
+                {
+                    "video":"",
+                    "image":"XMP-GPano:CroppedAreaLeftPixels",
+                    "value":"0"
+                },
+                {
+                    "video":"",
+                    "image":"XMP-GPano:CroppedAreaTopPixels",
+                    "value":"0"
+                },
+            ]
+
+            for i in GSpherical:
                 if i["video"] != "":
                     try:
-                        if i["video"] == Track+":"+name:
-                            value = root.text
-                            value = value.split(" ")
-                            ref = value.pop()
-
-                            data[i["image"][0]] = "\""+" ".join(value)+"\""
-                            if( i["image"][1] =="GPS:GPSAltitudeRef"):
-                                data[i["image"][1]] = "\"Above Sea Level\""
-                            else:
-                                data[i["image"][1]] = "\""+ref+"\""
-                            _check = _check+1
+                        el = root.find('.//'+str(i["video"]), namespaces = nsGSpherical)
+                        name = el.xpath('local-name()')
+                        value = el.text
+                        data[i["image"]] = value
                     except:
                         """"""
-            _limit = _limit+1
-            if _check > 8:
-                break
-            if _limit > 1000:
-                break
-        if len(data) > 1:
-            cmd = [] 
-            for flag in [data]:
-                for key, value in flag.items():
-                    cmd.append("-"+key+"="+value)
-            cmd.append(image)
-            output = self._exiftool(cmd, 1)
-        return True
+                else:
+                    data[i["image"]] = i["value"]
 
-    def getDateTimeFirstImageMetaData(self, root):
-        logging.info("Getting DateTime First Image Meta Data")
-        try:
+            for i in Track:
+                if i["video"] != "":
+                    try:
+                        el = root.find('.//'+str(i["video"]), namespaces = nsTrack1)
+                        name = el.xpath('local-name()')
+                        value = el.text
+                        data[i["image"]] = value
+                    except:
+                        """"""
+                else:
+                    data[i["image"]] = i["value"]
+            return data
+
+        def getAdditionalMetaData(self, root):
+            logging.info("Getting Additional Meta Data")
             data = {}
             if self._Timewrap == True:
                 Track = "Track2"
             else:
                 Track = "Track3"
             ns = {Track:'http://ns.exiftool.org/QuickTime/'+Track+'/1.0/'}
-            if root == None:
+            metadata = [
+                {
+                    "video":Track+":DeviceName",
+                    "image":"IFD0:Model",
+                    "value":""
+                },
+            ]
+            for i in metadata:
+                if i["video"] != "":
+                    try:
+                        el = root.find('.//'+str(i["video"]), namespaces = ns)
+                        name = el.xpath('local-name()')
+                        value = el.text
+                        data[i["image"]] = value
+                    except:
+                        """"""
+            return data
+
+        def getGPSValues(self, root, image):
+            logging.info("Getting GPS Value Data")
+            data = {}
+            nsTrack2 = {"Track2":'http://ns.exiftool.org/QuickTime/Track2/1.0/'}
+            nsTrack3 = {"Track3":'http://ns.exiftool.org/QuickTime/Track3/1.0/'}
+            if self._Timewrap == True:
+                Track = "Track2"
+            else:
+                Track = "Track3"
+            if Track == "Track3":
+                ns = nsTrack3
+            else:
+                ns = nsTrack2
+            metadata = [
+                {
+                    "video":Track+":GPSDateTime",
+                    "image":["GPS:GPSDateStamp", "GPS:GPSTimeStamp"],
+                    "value":""
+                },
+                {
+                    "video":Track+":GPSLatitude",
+                    "image":["GPS:GPSLatitude", "GPS:GPSLatitudeRef"],
+                    "value":""
+                },
+                {
+                    "video":Track+":GPSLongitude",
+                    "image":["GPS:GPSLongitude", "GPS:GPSLongitudeRef"],
+                    "value":""
+                },
+                {
+                    "video":Track+":GPSAltitude",
+                    "image":["GPS:GPSAltitude", "GPS:GPSAltitudeRef"],
+                    "value":""
+                },
+            ]
+            _check = 0
+            _limit = 0
+            while True:
+                if root == None:
+                    break
+                root = root.getnext()
+                if root == None:
+                    break
+                name = root.xpath('local-name()')
+                if name == "GPSDateTime":
+                    break
+                for i in metadata:
+                    if i["video"] != "":
+                        try:
+                            if i["video"] == Track+":"+name:
+                                value = root.text
+                                value = value.split(" ")
+                                ref = value.pop()
+
+                                data[i["image"][0]] = "\""+" ".join(value)+"\""
+                                if( i["image"][1] =="GPS:GPSAltitudeRef"):
+                                    data[i["image"][1]] = "\"Above Sea Level\""
+                                else:
+                                    data[i["image"][1]] = "\""+ref+"\""
+                                _check = _check+1
+                        except:
+                            """"""
+                _limit = _limit+1
+                if _check > 8:
+                    break
+                if _limit > 1000:
+                    break
+            if len(data) > 1:
+                cmd = [] 
+                for flag in [data]:
+                    for key, value in flag.items():
+                        cmd.append("-"+key+"="+value)
+                cmd.append(image)
+                output = self._exiftool(cmd, 1)
+            return True
+
+        def getDateTimeFirstImageMetaData(self, root):
+            logging.info("Getting DateTime First Image Meta Data")
+            try:
+                data = {}
+                if self._Timewrap == True:
+                    Track = "Track2"
+                else:
+                    Track = "Track3"
+                ns = {Track:'http://ns.exiftool.org/QuickTime/'+Track+'/1.0/'}
+                if root == None:
+                    return None
+                el = root.find('.//'+Track+':GPSDateTime', namespaces = ns)
+                dateTimeLocalName = el.xpath('local-name()')
+                dateTimeValue = el.text.split('.')
+                if len(dateTimeValue) > 1:
+                    DateTimeOriginal = dateTimeValue[0]+"Z"
+                    SubSecTimeOriginal = dateTimeValue[1]
+                    SubSecDateTimeOriginal = dateTimeValue[0]+"."+dateTimeValue[1]+"Z"
+                    data = {"DateTimeOriginal":DateTimeOriginal, "SubSecTimeOriginal":SubSecTimeOriginal, "SubSecDateTimeOriginal":SubSecDateTimeOriginal}
+            except:
                 return None
-            el = root.find('.//'+Track+':GPSDateTime', namespaces = ns)
-            dateTimeLocalName = el.xpath('local-name()')
-            dateTimeValue = el.text.split('.')
-            if len(dateTimeValue) > 1:
-                DateTimeOriginal = dateTimeValue[0]+"Z"
-                SubSecTimeOriginal = dateTimeValue[1]
-                SubSecDateTimeOriginal = dateTimeValue[0]+"."+dateTimeValue[1]+"Z"
-                data = {"DateTimeOriginal":DateTimeOriginal, "SubSecTimeOriginal":SubSecTimeOriginal, "SubSecDateTimeOriginal":SubSecDateTimeOriginal}
-        except:
-            return None
-        return data
-    
-    def injectDateTimeMetadata(self, img, root):
-        logging.info("Injecting Date Time Meta data")
-        image1     = self.getDateTimeFirstImageMetaData(root)
-        if image1 == None:
-            return None
-        cmd = [] 
-        for flag in [image1]:
-            for key, value in flag.items():
-                cmd.append("-"+key+"=\""+value+"\"")
-        cmd.append(img)
-        output = self._exiftool(cmd)
-        return output
-    
-    def injectMetadata(self, root):
-        logging.info('Injecting metadata Spherical & additional')
-        spherical  = self.getSphericalMetaData(root)
-        additional = self.getAdditionalMetaData(root)
-        data = [
-            spherical,
-            additional
-        ]
-        cmd = [] 
-        for flag in data:
-            for key, value in flag.items():
-                cmd.append("-"+key+"="+value)
-        cmd.append(self.__folderName)
-        output = self._exiftool(cmd, 1)
+            return data
+        
+        def injectDateTimeMetadata(self, img, root):
+            logging.info("Injecting Date Time Meta data")
+            image1     = self.getDateTimeFirstImageMetaData(root)
+            if image1 == None:
+                return None
+            cmd = [] 
+            for flag in [image1]:
+                for key, value in flag.items():
+                    cmd.append("-"+key+"=\""+value+"\"")
+            cmd.append(img)
+            output = self._exiftool(cmd)
+            return output
+        
+        def injectMetadata(self, root):
+            logging.info('Injecting metadata Spherical & additional')
+            spherical  = self.getSphericalMetaData(root)
+            additional = self.getAdditionalMetaData(root)
+            data = [
+                spherical,
+                additional
+            ]
+            cmd = [] 
+            for flag in data:
+                for key, value in flag.items():
+                    cmd.append("-"+key+"="+value)
+            cmd.append(self.__folderName)
+            output = self._exiftool(cmd, 1)
 
 def printErrors(errors):
     logging.info("Printing Critical/Non-Critical Errors")
