@@ -58,7 +58,7 @@ class T(TrekviewCommand):
         output = self._exiftool(cmd)
         gpx = filename.split(".")[0]
         jsn = json.loads(output.stdout.decode('utf-8'))[0]
-        framerate = 1
+        framerate = 5
         if os.path.exists(self.__folderName):
             shutil.rmtree(self.__folderName)
         os.makedirs(self.__folderName, exist_ok=True) 
