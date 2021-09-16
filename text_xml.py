@@ -89,14 +89,12 @@ if __name__ == '__main__':
                 data = []
                 tree = etree.parse(vfx)
                 root = tree.getroot()
-                print(etree.tostring(root))
                 time.sleep(3)
-                print(root)
                 time.sleep(3)
                 for el in root[0]:
-                    print(el)
                     if el.tag == "{http://ns.exiftool.org/QuickTime/Track3/1.0/}GPSDateTime":
                         data = getGPSw(el)
                         if data is not None:
-                            print(data)
-                            exit()
+                            for d in data["GPSData"]:
+                                k, v = list(d.items())[0]
+                                print("DateTime: {}, {}:{}", data["GPSDateTime"], k, v)
