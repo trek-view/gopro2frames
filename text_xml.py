@@ -52,7 +52,7 @@ class TrekviewCommand():
         return ret
 
 
-def getGPSw(el):
+def getGPSw(el, nsmap):
     data = {"GPSDateTime": "", "GPSData":[]}
     if el == None:
         return None
@@ -62,13 +62,13 @@ def getGPSw(el):
         el = el.getnext()
         if el == None:
             break
-        if el.tag == "{http://ns.exiftool.org/QuickTime/Track3/1.0/}GPSDateTime":
+        if el.tag == "{"+nsmap["Track3"]+"}GPSDateTime":
             break
-        if el.tag == "{http://ns.exiftool.org/QuickTime/Track3/1.0/}GPSLatitude":
+        if el.tag == "{"+nsmap["Track3"]+"}GPSLatitude":
             data["GPSData"].append({"GPSLatitude": el.text})
-        if el.tag == "{http://ns.exiftool.org/QuickTime/Track3/1.0/}GPSLongitude":
+        if el.tag == "{"+nsmap["Track3"]+"}GPSLongitude":
             data["GPSData"].append({"GPSLongitude": el.text})
-        if el.tag == "{http://ns.exiftool.org/QuickTime/Track3/1.0/}GPSAltitude":
+        if el.tag == "{"+nsmap["Track3"]+"}GPSAltitude":
             data["GPSData"].append({"GPSAltitude": el.text})
     return data
 
@@ -89,12 +89,11 @@ if __name__ == '__main__':
                 data = []
                 tree = etree.parse(vfx)
                 root = tree.getroot()
-                time.sleep(3)
-                time.sleep(3)
+                nsmap = root[0].nsmap
                 for el in root[0]:
-                    if el.tag == "{http://ns.exiftool.org/QuickTime/Track3/1.0/}GPSDateTime":
-                        data = getGPSw(el)
+                    if el.tag == "{"+nsmap["Track3"]+"}GPSDateTime":
+                        data = getGPSw(el, nsmap)
                         if data is not None:
                             for d in data["GPSData"]:
                                 k, v = list(d.items())[0]
-                                print("DateTime: {}, {}:{}", data["GPSDateTime"], k, v)
+                                print("DateTime: {}, {}: {}".format(data["GPSDateTime"], k, v))
