@@ -52,31 +52,82 @@ class TrekviewCommand():
 
 class T(TrekviewCommand):
 
-    def __init__(self, filename):
-        self.__folderName = os.getcwd() + os.sep + "Img"
+    def __init__(self, filename, framerate):
+        self.__folderName = os.getcwd() + os.sep + "Img_Test"
         cmd = ["-ee", "-j", "-G3", "-s", "-api", "Largefilesupport=1", filename]
         output = self._exiftool(cmd)
         gpx = filename.split(".")[0]
         jsn = json.loads(output.stdout.decode('utf-8'))[0]
-        framerate = 5
-        if os.path.exists(self.__folderName):
-            shutil.rmtree(self.__folderName)
-        os.makedirs(self.__folderName, exist_ok=True) 
-        cmd = ["ffmpeg", "-i", filename, "-r", str(framerate), "./Img/img%d.jpg"]
-        output = subprocess.run(cmd, capture_output=True)
-        if output.returncode != 0: 
-            exit("Error in ffmpeg")
-        else:
-            gpsData = self.getJSON13(jsn)
-            gpsData = self.createGpxFile(gpsData, framerate)
-            with open(gpx+'.gpx', 'w') as f:
+        gpsDataJSN = self.getJSON13(jsn)
+
+        frs = [1, 5]
+
+        for i in frs:
+            fldr = self.__folderName+os.sep+"Img_"+str(i)
+
+            if os.path.exists(fldr):
+                shutil.rmtree(fldr)
+            os.makedirs(fldr, exist_ok=True) 
+
+            folder_1 = fldr+os.sep+"01" 
+            os.makedirs(folder_1, exist_ok=True) 
+
+            cmd = ["ffmpeg", "-i", filename, "-r", str(i), folder_1+os.sep+"img%d.jpg"]
+            output = subprocess.run(cmd, capture_output=True)
+
+            folder_2 = fldr+os.sep+"02" 
+            os.makedirs(folder_2, exist_ok=True) 
+
+            cmd = ["ffmpeg", "-i", filename, "-r", str(i), folder_2+os.sep+"img%d.jpg"]
+            output = subprocess.run(cmd, capture_output=True)
+
+            folder_3 = fldr+os.sep+"03" 
+            os.makedirs(folder_3, exist_ok=True) 
+
+            cmd = ["ffmpeg", "-i", filename, "-r", str(i), folder_3+os.sep+"img%d.jpg"]
+            output = subprocess.run(cmd, capture_output=True)
+
+
+            gpx_1 = fldr+os.sep+"01.gpx"
+
+            gpsData = self.createGpxFile1(copy.deepcopy(gpsDataJSN), i, folder_1)
+            with open(gpx_1, 'w') as f:
                 f.write(gpsData)
                 f.close()
-                cmd = ["-geotag", gpx+'.gpx', "'-geotime<${datetimeoriginal}-00:00'", "-v2", '-overwrite_original', "./Img"]
+                print(gpx_1)
+                print(folder_1)
+                cmd = ["-geotag", gpx_1, "'-geotime<${datetimeoriginal}-00:00'", "-v2", '-overwrite_original', folder_1]
                 output = self._exiftool(cmd)
+                print(output)
 
+            gpx_2 = fldr+os.sep+"02.gpx" 
 
-    def createGpxFile(self, gpsData, frameRate):
+            gpsData = self.createGpxFile2(copy.deepcopy(gpsDataJSN), i, folder_2)
+            with open(gpx_2, 'w') as f:
+                f.write(gpsData)
+                f.close()
+                print(gpx_2)
+                print(folder_2)
+                cmd = ["-geotag", gpx_2, "'-geotime<${datetimeoriginal}-00:00'", "-v2", '-overwrite_original', folder_2]
+                output = self._exiftool(cmd)
+                print(output)
+
+            gpx_3 = fldr+os.sep+"03.gpx"
+
+            gpsData = self.createGpxFile3(copy.deepcopy(gpsDataJSN), i, folder_3)
+            with open(gpx_3, 'w') as f:
+                f.write(gpsData)
+                f.close()
+                print(gpx_3)
+                print(folder_3)
+                cmd = ["-geotag", gpx_3, "'-geotime<${datetimeoriginal}-00:00'", "-v2", '-overwrite_original', folder_3]
+                output = self._exiftool(cmd)
+                print(output)
+
+            print(fldr, folder_1, folder_2, folder_3, gpx_1, gpx_2, gpx_3)
+        exit()
+
+    def createGpxFile1(self, gpsData, frameRate, folder):
         gpx = gpxpy.gpx.GPX()
 
         # Create first track in our GPX:
@@ -89,7 +140,7 @@ class T(TrekviewCommand):
 
         frameRateSeconds = float(1/float(frameRate))
         deltaSeconds = 0.0
-        flen = len(fnmatch.filter(os.listdir("./Img"), '*.jpg'))
+        flen = len(fnmatch.filter(os.listdir(folder), '*.jpg'))
         j = 0
         k = 0
         t = datetime.datetime.strptime(gpsData[0]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
@@ -109,7 +160,98 @@ class T(TrekviewCommand):
                 DateTimeOriginal = dateTimeValue[0]+"Z"
                 SubSecTimeOriginal = dateTimeValue[1]
                 SubSecDateTimeOriginal = dateTimeValue[0]+"."+dateTimeValue[1]+"Z"
-                cmd = ["-ee", '-DateTimeOriginal="'+DateTimeOriginal+'"', '-SubSecTimeOriginal="'+SubSecTimeOriginal+'"', '-SubSecDateTimeOriginal="'+SubSecDateTimeOriginal+'"', '-overwrite_original', "Img/img"+str(i+1)+".jpg"]
+                cmd = ["-ee", '-DateTimeOriginal="'+DateTimeOriginal+'"', '-SubSecTimeOriginal="'+SubSecTimeOriginal+'"', '-SubSecDateTimeOriginal="'+SubSecDateTimeOriginal+'"', '-overwrite_original', folder+os.sep+"img"+str(i+1)+".jpg"]
+                output = self._exiftool(cmd)
+            t = t+datetime.timedelta(0, frameRateSeconds)
+            i = i+1
+            j = j+1
+            if j == frameRate:
+                j = 0
+
+        return gpx.to_xml()
+
+    def createGpxFile2(self, gpsData, frameRate, folder):
+        gpx = gpxpy.gpx.GPX()
+
+        # Create first track in our GPX:
+        gpx_track = gpxpy.gpx.GPXTrack()
+        gpx.tracks.append(gpx_track)
+
+        # Create first segment in our GPX track:
+        gpx_segment = gpxpy.gpx.GPXTrackSegment()
+        gpx_track.segments.append(gpx_segment)
+
+        frameRateSeconds = float(1/float(frameRate))
+        deltaSeconds = 0.0
+        flen = len(fnmatch.filter(os.listdir(folder), '*.jpg'))
+        j = 0
+        k = 0
+        i = 1
+        t = datetime.datetime.strptime(gpsData[0]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+        # Create points:
+        for gps in gpsData:
+            deg, minutes, seconds, direction = re.split('[deg\'"]+', gps["GPSLatitude"])
+            gps["GPSLatitude"] = (float(deg) + float(minutes)/60 + float(seconds)/(60*60)) * (-1 if direction in ['W', 'S'] else 1)
+            deg, minutes, seconds, direction = re.split('[deg\'"]+', gps["GPSLongitude"])
+            gps["GPSLongitude"] = (float(deg) + float(minutes)/60 + float(seconds)/(60*60)) * (-1 if direction in ['W', 'S'] else 1)
+            gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=gps["GPSLatitude"], longitude=gps["GPSLongitude"], time=t))
+            t = t+datetime.timedelta(0, frameRateSeconds)
+
+        t = datetime.datetime.strptime(gpsData[0]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+        # Inject date time:
+        for i in range(0, flen-1):
+            if j == 0:
+                dateTimeValue = gpsData[k]["GPSDateTime"].split('.')
+            else:
+                dateTimeValue = datetime.datetime.strftime(t, "%Y:%m:%d %H:%M:%S.%f").split('.')
+            if len(dateTimeValue) > 1:
+                DateTimeOriginal = dateTimeValue[0]+"Z"
+                SubSecTimeOriginal = dateTimeValue[1]
+                SubSecDateTimeOriginal = dateTimeValue[0]+"."+dateTimeValue[1]+"Z"
+                cmd = ["-ee", '-DateTimeOriginal="'+DateTimeOriginal+'"', '-SubSecTimeOriginal="'+SubSecTimeOriginal+'"', '-SubSecDateTimeOriginal="'+SubSecDateTimeOriginal+'"', '-overwrite_original', folder+os.sep+"img"+str(i+1)+".jpg"]
+                output = self._exiftool(cmd)
+            i = i+1
+            t = t+datetime.timedelta(0, frameRateSeconds)
+            j = j+1
+            if j == frameRate:
+                j = 0
+                k = k+1
+        return gpx.to_xml()
+
+    def createGpxFile3(self, gpsData, frameRate, folder):
+        gpx = gpxpy.gpx.GPX()
+
+        # Create first track in our GPX:
+        gpx_track = gpxpy.gpx.GPXTrack()
+        gpx.tracks.append(gpx_track)
+
+        # Create first segment in our GPX track:
+        gpx_segment = gpxpy.gpx.GPXTrackSegment()
+        gpx_track.segments.append(gpx_segment)
+
+        frameRateSeconds = float(1/float(frameRate))
+        deltaSeconds = 0.0
+        flen = len(fnmatch.filter(os.listdir(folder), '*.jpg'))
+        j = 0
+        k = 0
+        t = datetime.datetime.strptime(gpsData[0]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+        # Create points:
+        for i in range(0, flen-1):
+            if j == 0:
+                deg, minutes, seconds, direction = re.split('[deg\'"]+', gpsData[k]["GPSLatitude"])
+                gpsData[k]["GPSLatitude"] = (float(deg) + float(minutes)/60 + float(seconds)/(60*60)) * (-1 if direction in ['W', 'S'] else 1)
+                deg, minutes, seconds, direction = re.split('[deg\'"]+', gpsData[k]["GPSLongitude"])
+                gpsData[k]["GPSLongitude"] = (float(deg) + float(minutes)/60 + float(seconds)/(60*60)) * (-1 if direction in ['W', 'S'] else 1)
+                gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=gpsData[k]["GPSLatitude"], longitude=gpsData[k]["GPSLongitude"], time=t))
+                print(j, gpsData[k]["GPSLatitude"], gpsData[k]["GPSLongitude"], t, frameRate)
+                k = k+1
+            dateTimeValue = datetime.datetime.strftime(t, "%Y:%m:%d %H:%M:%S.%f").split('.')
+            print(dateTimeValue, i, j)
+            if len(dateTimeValue) > 1:
+                DateTimeOriginal = dateTimeValue[0]+"Z"
+                SubSecTimeOriginal = dateTimeValue[1]
+                SubSecDateTimeOriginal = dateTimeValue[0]+"."+dateTimeValue[1]+"Z"
+                cmd = ["-ee", '-DateTimeOriginal="'+DateTimeOriginal+'"', '-SubSecTimeOriginal="'+SubSecTimeOriginal+'"', '-SubSecDateTimeOriginal="'+SubSecDateTimeOriginal+'"', '-overwrite_original', folder+os.sep+"img"+str(i+1)+".jpg"]
                 output = self._exiftool(cmd)
             t = t+datetime.timedelta(0, frameRateSeconds)
             i = i+1
@@ -144,11 +286,11 @@ if __name__ == '__main__':
     parser.add_argument("-f", "--frame-rate", type=str, help="Frame rate for ffmpeg command.")
     args = parser.parse_args()
     if (args.input is not None):
-        ffmpegFrameRate = "5"
+        ffmpegFrameRate = 5
         if args.frame_rate != None:
             try:
                 ffmpegFrameRate = int(args.frame_rate)
             except:
                 exit("Please enter a valid integer for frame rate.")
             ffmpegFrameRate = str(ffmpegFrameRate)
-        t = T(args.input)
+        t = T(args.input, ffmpegFrameRate)
