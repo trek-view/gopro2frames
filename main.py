@@ -1,12 +1,22 @@
-import subprocess, json, argparse, platform, copy, os, re, shutil, shlex, time, logging
-from datetime import datetime, timedelta
+import subprocess, argparse, platform, logging, datetime, fnmatch, shutil, shlex, copy, time, json, os, re
 from pathlib import Path
 from lxml import etree
 from os import walk
+import gpxpy
+
+def log(msg, level="info", cnf={}):
+    if cnf["debug"] == True :
+        print(msg)
+    if level == "info":
+        logging.info(msg)
+    if level == "warning":
+        logging.warning(msg)
+    if level == "error":
+        logging.error(msg)
 
 class TrekviewCommand():
 
-    def _subprocess(self, command, sh=0):
+    def __subprocess(self, command, sh=0):
         logging.info('Executing subprocess')
         ret = False
         try:
@@ -19,10 +29,13 @@ class TrekviewCommand():
             else:
                 raise Exception(output)
         except Exception as e:
-            logging.error(e.stderr.decode('utf-8',"ignore"))
+            if type(e) is TypeError:
+                logging.error(str(e))
+            else:
+                logging.error(e.stderr.decode('utf-8',"ignore"))
             ret = None
         except:
-            exit("Error:Please try again or check if `ExifTool`is installed or not.")
+            exit("Error:Please try again.")
         return ret
 
     def _exiftool(self, command, sh=0):
@@ -32,7 +45,7 @@ class TrekviewCommand():
         else:
             exiftool = "exiftool"
         command.insert(0, exiftool)
-        ret = self._subprocess(command, sh)
+        ret = self.__subprocess(command, sh)
         if ret == None:
             exit("Error occured while executing exiftool.")
         return ret
@@ -44,34 +57,13 @@ class TrekviewCommand():
         else:
             ffmpeg = "ffmpeg"
         command.insert(0, ffmpeg)
-        ret = self._subprocess(command, sh)
+        ret = self.__subprocess(command, sh)
         if ret == None:
-            exit("Error occured while executing exiftool, please see logs for more info.")
+            exit("Error occured while executing ffmpeg, please see logs for more info.")
         return ret
 
-class TrekviewPreProcess(TrekviewCommand):
-    _TimeWrap = False
-    """
-        init function
-        It checks if the video file is valid or not.
-        If the video file is valid then it will execute exiftool to get the metadata
-    """
-    def __init__(self, filename):
-        logging.info('Strarting Pre Process')
-        filecheck = self.checkFileExists(filename)
-        if filecheck == True:
-            self.__filename = filename
-            self.preProcessExifToolExecute()
-        else:
-            exit("Please provide a valid video file.")
-    
-    """
-        checkFileExists function
-        It checks if the video file is exists/valid or not.
-        return (True|False)
-    """
-    def checkFileExists(self, filename):
-        logging.info("Checking If file exists {}".format(filename))
+    def _checkFileExists(self, filename):
+        logging.info("Checking if file exists")
         try:
             video_file = Path(filename)
             if video_file.is_file():
@@ -81,38 +73,32 @@ class TrekviewPreProcess(TrekviewCommand):
         except:
             return False
 
-    """
-        preProcessExifToolExecute function
-        It will run exiftool to get all the data that is required for pre-process-1
-    """            
-    def preProcessExifToolExecute(self):
+
+class TrekviewPreProcess(TrekviewCommand):
+    __TimeWrap = False
+    def __init__(self):
+        """"""
+    def _preProcessExifToolExecute(self, filename):
         logging.info("Getting Pre Process Info")
-        cmd = ["-ee", "-j", "-DeviceName", "-ProjectionType", "-MetaFormat", "-StitchingSoftware", "-VideoFrameRate", self.__filename]
+        cmd = ["-ee", "-j", "-DeviceName", "-ProjectionType", "-MetaFormat", "-StitchingSoftware", "-VideoFrameRate", "-SourceImageHeight", "-SourceImageWidth", filename]
         output = self._exiftool(cmd)
-        self.__exifPreProcessData = json.loads(output.stdout.decode('utf-8',"ignore"))
-        if len(self.__exifPreProcessData) > 0:
-            self.__exifPreProcessData = self.__exifPreProcessData[0]
+        exifPreProcessData = json.loads(output.stdout.decode('utf-8',"ignore"))
+        if len(exifPreProcessData) > 0:
+            preProcessValidated = self.__validatePreProcessData(exifPreProcessData[0])
+            exifPreProcessData[0]["Timewrap"] = self.__TimeWrap
+            self.__printErrors(preProcessValidated)
+            return exifPreProcessData[0]
         else:
-            exit("Data not available")
-
-    """
-        getPreProcessData function
-        It will return the data that is required for pre-process-1
-        return (Object)
-    """  
-    def getPreProcessData(self):
-        logging.info("Getting Pre Process Data")
-        return copy.deepcopy(self.__exifPreProcessData)
-
+            return None
     """
         checkProjectionType function
         It will check if the ProjectionType is `equirectangular`
         return (True|False)
     """  
-    def checkProjectionType(self):
+    def __checkProjectionType(self, data):
         logging.info("Checking Pre Process Projection Type")
-        if 'ProjectionType' in self.__exifPreProcessData:
-            if self.__exifPreProcessData['ProjectionType'] == 'equirectangular':
+        if 'ProjectionType' in data:
+            if data['ProjectionType'] == 'equirectangular':
                 return True
             return False
         else:
@@ -123,12 +109,12 @@ class TrekviewPreProcess(TrekviewCommand):
         It will check if the DeviceName is `Fusion` or `GoPro Max`
         return (True|False)
     """  
-    def checkDeviceName(self):
+    def __checkDeviceName(self, data):
         logging.info("Checking Pre Process Device Name")
         devices = ["Fusion", "GoPro Max"]
-        if 'DeviceName' in self.__exifPreProcessData:
-            if self.__exifPreProcessData['DeviceName'] in devices:
-                self.__device = self.__exifPreProcessData['DeviceName']
+        if 'DeviceName' in data:
+            if data['DeviceName'] in devices:
+                self.__device = data['DeviceName']
                 return True
             return False
         else:
@@ -139,10 +125,10 @@ class TrekviewPreProcess(TrekviewCommand):
         It will check if the MetaFormat is `gpmd`
         return (True|False)
     """  
-    def checkMetaFormat(self):
+    def __checkMetaFormat(self, data):
         logging.info("Checking Pre Process Meta Format")
-        if 'MetaFormat' in self.__exifPreProcessData:
-            if self.__exifPreProcessData['MetaFormat'] == "gpmd":
+        if 'MetaFormat' in data:
+            if data['MetaFormat'] == "gpmd":
                 return True
             return False
         else:
@@ -153,11 +139,11 @@ class TrekviewPreProcess(TrekviewCommand):
         It will check if the StitchingSoftware is `Fusion Studio / GStreamer` or `Spherical Metadata Tool`
         return (True|False)
     """ 
-    def checkStitchingSoftware(self):
+    def __checkStitchingSoftware(self, data):
         logging.info("Checking Pre Process Stitching Software")
         softwares = ["Fusion Studio / GStreamer", "Spherical Metadata Tool"]
-        if 'StitchingSoftware' in self.__exifPreProcessData:
-            if self.__exifPreProcessData['StitchingSoftware'] in softwares:
+        if 'StitchingSoftware' in data:
+            if data['StitchingSoftware'] in softwares:
                 return True
             return False
         else:
@@ -168,10 +154,10 @@ class TrekviewPreProcess(TrekviewCommand):
         It will check if the VideoFrameRate is greater than 5
         return (True|False)
     """ 
-    def checkVideoFrameRate(self):
+    def __checkVideoFrameRate(self, data):
         logging.info("Checking Pre Process Video FrameRate")
-        if 'VideoFrameRate' in self.__exifPreProcessData:
-            if self.__exifPreProcessData['VideoFrameRate'] > 5:
+        if 'VideoFrameRate' in data:
+            if data['VideoFrameRate'] > 5:
                 return True
             return False
         else:
@@ -182,8 +168,8 @@ class TrekviewPreProcess(TrekviewCommand):
         It will validate the metadata for `pre-process-1`
         returns a variable which contains all the error information. (Object)
     """ 
-    def validatePreProcessData(self):
-        _TimeWrap = False
+    def __validatePreProcessData(self, data):
+        __TimeWrap = False
         logging.info("Validate Pre Process Video")
         errors = {
             "hasErrors":None,
@@ -220,7 +206,7 @@ class TrekviewPreProcess(TrekviewCommand):
         }
         critical_errors = []
         non_critical_errors = []
-        projection = self.checkProjectionType()
+        projection = self.__checkProjectionType(data)
 
         #Validate Critical Errors
         if projection is True:
@@ -229,21 +215,21 @@ class TrekviewPreProcess(TrekviewCommand):
             errors['critical']['projection']['errorStatus'] = True
             errors['criticalErrors'] = True
 
-        devicename = self.checkDeviceName()
+        devicename = self.__checkDeviceName(data)
         if devicename is True:
             errors['critical']['deviceName']['errorStatus'] = False
         else:
             errors['critical']['deviceName']['errorStatus'] = True
             errors['criticalErrors'] = True
 
-        metaformat = self.checkMetaFormat()
+        metaformat = self.__checkMetaFormat(data)
         if metaformat is True:
             errors['critical']['metaFormat']['errorStatus'] = False
         else:
             errors['critical']['metaFormat']['errorStatus'] = True
             errors['criticalErrors'] = True
             
-        stitchingSoftware = self.checkMetaFormat()
+        stitchingSoftware = self.__checkMetaFormat(data)
         if stitchingSoftware is True:
             errors['critical']['stitchingSoftware']['errorStatus'] = False
         else:
@@ -252,7 +238,7 @@ class TrekviewPreProcess(TrekviewCommand):
             
 
         #Validate Non-Critical Errors
-        videoFrameRate = self.checkMetaFormat()
+        videoFrameRate = self.__checkMetaFormat(data)
         if videoFrameRate is True:
             errors['non_critical']['videoFrameRate']['errorStatus'] = False
         else:
@@ -261,7 +247,7 @@ class TrekviewPreProcess(TrekviewCommand):
             
         if metaformat is True and (self.__device == "GoPro Max"):
             errors['non_critical']['metaFormatMax']['errorStatus'] = True
-            _TimeWrap = True
+            __TimeWrap = True
         else:
             errors['non_critical']['metaFormatMax']['errorStatus'] = False
             errors['nonCriticalErrors'] = True
@@ -270,390 +256,307 @@ class TrekviewPreProcess(TrekviewCommand):
             errors['hasErrors'] = True
             
         return errors
+    
+    def __printErrors(self, errors):
+        logging.info("Printing Critical/Non-Critical Errors")
+        if errors["hasErrors"] == True:
+            if errors["criticalErrors"] == True:
+                for k, v in errors["critical"].items():
+                    if v["errorStatus"] == True:
+                        print("Critical Error: {}".format(v["error"]))
+                exit('Script stopped due to critical error!')
+            elif errors["nonCriticalErrors"] == True:
+                for k, v in errors["non_critical"].items():
+                    if v["errorStatus"] == True:
+                        print("Non-Critical Error: {}".format(v["error"]))
 
 class TrekviewProcessMp4(TrekviewCommand):
-    def __init__(self, filename, data):
-        self.VideoData = data
-        self._Timewrap = data["Timewrap"]
-        logging.info("Starting Mp4 Process")
-        if platform.system() == "Windows":
-            self.__exiftool = "exiftool.exe"
-        else:
-            self.__exiftool = "exiftool"
-        if platform.system() == "Windows":
-            self.__ffmpeg = "ffmpeg.exe"
-        else:
-            self.__ffmpeg = "ffmpeg"
-        filecheck = self.checkFileExists(filename)
-        if filecheck == True:
-            self.__filename = filename
-            self.extractMetaData()
-            self.breakIntoFrames()
-        else:
-            exit("Please provide a valid video file.")
+    def __init__(self):
+        """"""
 
-    """
-        checkFileExists function
-        It checks if the video file is exists/valid or not.
-        return (True|False)
-    """
-    def checkFileExists(self, filename):
-        logging.info("Checking if file exists")
-        try:
-            video_file = Path(filename)
-            if video_file.is_file():
-                return True
-            else:
-                return False
-        except:
-            return False
-
-    def extractMetaData(self):
-        logging.info("Extracting Vide Meta Data")
-        xmlFile = os.getcwd() + os.sep + 'VIDEO_META.xml'
-        cmd = ["-ee", "-G3", "-api", "LargeFileSupport=1", "-X", self.__filename]
-        output = self._exiftool(cmd)
-        with open(xmlFile, "w") as f:
-            self.__xmlOutput = output.stdout
-            f.write(self.__xmlOutput.decode('utf-8'))  
-        return True
-    
-    def breakIntoFrames(self):
-        logging.info('Start breaking frames')
-        self.__folderName = os.getcwd() + os.sep + "Img"
-        root = etree.fromstring(self.__xmlOutput)
-        if self._Timewrap == True:
-            Track = "Track2"
-        else:
-            Track = "Track3"
-        DTO = root.xpath('.//'+Track+':GPSDateTime', namespaces = {Track:'http://ns.exiftool.org/QuickTime/'+Track+'/1.0/'})
-        jDTO = self.parseJsonForGPS()
-        _jDTO = []
-        for k, v in jDTO.items():
-            _kv = {}
-            for value in v:
-                for key in value:
-                    _kv[key] = value[key]
-            _jDTO.append(_kv)
-
-        try:
-            if os.path.exists(self.__folderName):
-                shutil.rmtree(self.__folderName)
-            os.makedirs(self.__folderName, exist_ok=True) 
-            cmd = [self.__ffmpeg, "-i", self.__filename, "-r", "5", self.__folderName+os.sep+"img%d.jpg"]
-            output = subprocess.run(cmd, capture_output=True)
-            if output.returncode != 0: 
-                raise Exception(output)
-            else:
-                images = next(walk(self.__folderName), (None, None, []))[2]
-                for img in images:
-                    iDM = self.injectDateTimeMetadata(self.__folderName+os.sep+img, _jDTO)
-                    if iDM == None:
-                        logging.error('Unable to get GPS Date Time for file: {}'.format(self.__folderName+os.sep+img))
-                if iDM != None:
-                    try:
-                        cmd = shlex.split(self.__exiftool+" '-DateTimeOriginal+<0:0:${filesequence;$_*=0.2}' "+self.__folderName)
-                        output = subprocess.run(cmd, capture_output=True)
-                        if output.returncode == 0:
-                            for img in images:
-                                try:
-                                    cmd = [self.__exiftool, "-ee", "-j", "-DateTimeOriginal", self.__folderName+os.sep+img]
-                                    output = subprocess.run(cmd, capture_output=True)
-                                    if output.returncode == 0:
-                                        img_dateTimeOriginal= json.loads(output.stdout.decode('utf-8',"ignore"))
-                                        if len(img_dateTimeOriginal) > 0:
-                                            img_dateTimeOriginal = img_dateTimeOriginal[0]["DateTimeOriginal"]
-                                            for _val in _jDTO:
-                                                _match = False
-                                                atd = time.strptime(_val["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
-                                                btd = time.strptime(img_dateTimeOriginal, "%Y:%m:%d %H:%M:%S")
-                                                if (btd <= atd) == True:
-                                                    _match = True
-                                                    self.getGPSValues(_val, self.__folderName+os.sep+img)
-                                                    break
-                                            if _match == False:
-                                                self.getGPSValues(_jDTO[-1], self.__folderName+os.sep+img)
-                                    else:
-                                        raise Exception(output)
-                                except Exception as e:
-                                    exit("Error: {}".format( e.stderr.decode('utf-8',"ignore")))
-                                except:
-                                    exit("Error:Please try again or check if `ExifTool`is installed or not.")
-                        self.injectMetadata(root)
-                    except Exception as e:
-                        exit( e.stderr.decode('utf-8',"ignore"))
-                    except:
-                        exit("Error occurred. Please try again or check if `ExifTool`is installed or not.")
-        except Exception as e:
-            exit("Error: {}".format( e.stderr.decode('utf-8',"ignore")))
-        except:
-            exit("Error occurred. Please try again or check if `Ffmpeg`is installed or not.")
-        if iDM == None:
-            exit("Unable to get GPS DateTime")
-        return True
-    
-    def parseJsonForGPS(self):
-        output = self._exiftool(["-ee", "-G3", "-api", "LargeFileSupport=1", "-j", self.__filename])
-        with open("fileexiftool.json", "w") as f:
-            f.write(json.dumps(output.stdout.decode('utf-8')))
-        jsonData = json.loads(output.stdout.decode('utf-8',"ignore"))  
-        if len(jsonData) > 0:
-            jsonData = jsonData[0]
-        else:
+    def __getGPSw(self, el, nsmap):
+        data = {"GPSDateTime": "", "GPSData":[]}
+        if el == None:
             return None
-        gpsDataString = []
-        gpsData = {}
-        for k,v in jsonData.items():
-            data = k.split(":")
-            if len(data) > 1:
-                if data[1] == "GPSDateTime":
-                    gpsDataString.append(k)
-        for gpsString in gpsDataString:
-            g1Data = gpsString.split(":")
-            for k,v in jsonData.items():
-                g2Data = k.split(":")
-                if len(g2Data) > 1:
-                    if g1Data[0] == g2Data[0]:
-                        if g1Data[0] in gpsData:
-                            if g2Data[1] in ["GPSAltitude", "GPSLongitude", "GPSLatitude", "GPSDateTime"]:
-                                gpsData[g1Data[0]].append({g2Data[1]:v})
-                        else:
-                            gpsData[g1Data[0]] = []
-        return gpsData
-
-    def getSphericalMetaData(self, root):
-        logging.info("Getting Spherical Meta Data")
-
-        output = self._exiftool(["-ee", "-G3", "-api", "LargeFileSupport=1", "-j", "-StitchingSoftware", "-ProjectionType","-SourceImageHeight","-SourceImageWidth", self.__filename])
-        jsonData = json.loads(output.stdout.decode('utf-8',"ignore"))
-
-        if len(jsonData) > 0:
-            jsonData = jsonData[0]
         else:
-            return None
-        data = {}
-
-        GSpherical = [
-            {
-                "video":"StitchingSoftware",
-                "image":"XMP-GPano:StitchingSoftware",
-                "value":""
-            },
-            {
-                "video":"",
-                "image":"XMP-GPano:SourcePhotosCount",
-                "value":2
-            },
-            {
-                "video":"",
-                "image":"XMP-GPano:UsePanoramaViewer",
-                "value":"true"
-            },
-            {
-                "video":"ProjectionType",
-                "image":"XMP-GPano:ProjectionType",
-                "value":""
-            },
-        ]
-        Track = [
-            {
-                "video":"SourceImageHeight",
-                "image":"XMP-GPano:CroppedAreaImageHeightPixels",
-                "value":""
-            },
-            {
-                "video":"SourceImageWidth",
-                "image":"XMP-GPano:CroppedAreaImageWidthPixels",
-                "value":""
-            },
-            {
-                "video":"SourceImageHeight",
-                "image":"XMP-GPano:FullPanoHeightPixels",
-                "value":""
-            },
-            {
-                "video":"SourceImageWidth",
-                "image":"XMP-GPano:FullPanoWidthPixels",
-                "value":""
-            },
-            {
-                "video":"",
-                "image":"XMP-GPano:CroppedAreaLeftPixels",
-                "value":0
-            },
-            {
-                "video":"",
-                "image":"XMP-GPano:CroppedAreaTopPixels",
-                "value":0
-            },
-        ]
-
-        for i in GSpherical:
-            if i["video"] != "":
-                try:
-                    data[i["image"]] = jsonData["Main:"+i["video"]]
-                except:
-                    """"""
-            else:
-                data[i["image"]] = i["value"]
-
-        for i in Track:
-            if i["video"] != "":
-                try:
-                    data[i["image"]] = jsonData["Main:"+i["video"]]
-                except:
-                    """"""
-            else:
-                data[i["image"]] = i["value"]
+            data["GPSDateTime"] = el.text
+        print("#", el.text)
+        for i in range(0, 500):
+            el = el.getnext()
+            if el == None:
+                break
+            if el.tag == "{"+nsmap["Track3"]+"}GPSDateTime":
+                break
+            if el.tag == "{"+nsmap["Track3"]+"}GPSLatitude":
+                data["GPSData"].append({"GPSLatitude": el.text})
+            if el.tag == "{"+nsmap["Track3"]+"}GPSLongitude":
+                data["GPSData"].append({"GPSLongitude": el.text})
+            if el.tag == "{"+nsmap["Track3"]+"}GPSAltitude":
+                data["GPSData"].append({"GPSAltitude": el.text})
         return data
 
-    def getAdditionalMetaData(self, root):
-        logging.info("Getting Additional Meta Data")
-        data = {}
-        data["IFD0:Model"] = self.VideoData["DeviceName"]
-        return data
+    def _processXMLGPS(self, filename):
+        output = self._exiftool(["-ee", "-G3", "-api", "LargeFileSupport=1", "-X", filename])
+        if output is None:
+            exit("Unable to get metadata information")
+        xmlData = output.stdout.decode('utf-8',"ignore")
+        gpsData = []
+        xmlFileName = os.getcwd() + os.sep + 'VIDEO_META.xml'
+        with open(xmlFileName, "w") as f:
+            f.write(xmlData)
+            f.close()
+            data = []
+            tree = etree.parse(xmlFileName)
+            root = tree.getroot()
+            nsmap = root[0].nsmap
 
-    def getGPSValues(self, data, image):
-        logging.info("Getting GPS Value Data")
-        metadata = [
-            {
-                "video":"GPSDateTime",
-                "image":["GPS:GPSDateStamp", "GPS:GPSTimeStamp"],
-                "value":""
-            },
-            {
-                "video":"GPSLatitude",
-                "image":["GPS:GPSLatitude", "GPS:GPSLatitudeRef"],
-                "value":""
-            },
-            {
-                "video":"GPSLongitude",
-                "image":["GPS:GPSLongitude", "GPS:GPSLongitudeRef"],
-                "value":""
-            },
-            {
-                "video":"GPSAltitude",
-                "image":["GPS:GPSAltitude", "GPS:GPSAltitudeRef"],
-                "value":""
-            },
-        ]
-        _data = {}
-        for mdata in metadata:
-            value = data[mdata["video"]]
-            value = value.split(" ")
-            if mdata["video"] == "GPSDateTime":
-                _data[mdata["image"][0]] = "\""+value[0]+"\""
-                _data[mdata["image"][1]] = "\""+value[1]+"\""
-                continue
-            ref = value.pop()
-            value.append(ref)
+            for el in root[0]:
+                if el.tag == "{"+nsmap["Track3"]+"}GPSDateTime":
+                    data = self.__getGPSw(el, nsmap)
+                    datag = []
+                    j = 0
+                    for i in range(0, len(data["GPSData"])):
+                        if j >= len(data["GPSData"]):
+                            break
+                        datag.append({
+                            "GPSLatitude": data["GPSData"][j]["GPSLatitude"],
+                            "GPSLongitude": data["GPSData"][j+1]["GPSLongitude"],
+                            "GPSAltitude": data["GPSData"][j+2]["GPSAltitude"]
+                        })
+                        j = j+3
+                    gpsData.append({
+                        "GPSDateTime": data["GPSDateTime"],
+                        "GPSData": datag
+                    })
+            return gpsData
+        return []
+    def _breakIntoFrames(self, filename, frameRate, folder):
+        if os.path.exists(folder):
+            shutil.rmtree(folder)
+        os.makedirs(folder, exist_ok=True) 
+        cmd = ["-i", filename, "-r", str(frameRate), folder+os.sep+"img%d.jpg"]
+        output = self._ffmpeg(cmd, 1)
+        if output.returncode != 0:
+            return False 
+        else:
+            return True
+
+    def _getTimesBetween(self, start, end, frameRate):
+        t_start = datetime.datetime.strptime(start, "%Y:%m:%d %H:%M:%S.%f")
+        t_end = datetime.datetime.strptime(end, "%Y:%m:%d %H:%M:%S.%f")
+        diff = t_end - t_start
+        diff0 = diff/float(frameRate)
+        times = []
+        t = t_start
+        for i in range(0, frameRate-1):
+            t = t+diff0
+            times.append(t)
+        return times
+
+class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
+    def __init__(self, args):
+
+        self.__validate(args)
+
+        imageFolder = os.getcwd() + os.sep + 'Img'
+        filename = args.input
+        frameRate = self._config["frameRate"]
+
+        preProcessDataJSON = self._preProcessExifToolExecute(args.input)
+        if preProcessDataJSON is None:
+            exit("Unable to get metadata from video.")
+
+        framesBroken = self._breakIntoFrames(filename, frameRate, imageFolder)
+        if framesBroken == False:
+            exit("Unable to extract frames from video.")
+        images = fnmatch.filter(os.listdir(imageFolder), '*.jpg')
+        imagesCount = len(images)
+        preProcessDataXMLGPS = self._processXMLGPS(args.input)
+        if len(preProcessDataXMLGPS) <= 0:
+            exit("Unable to get metadata from video.")
+
+        start = datetime.datetime.strptime(preProcessDataXMLGPS[0]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+        end = datetime.datetime.strptime(preProcessDataXMLGPS[-1]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+        duration = end - start
+        
+        gpsData = []
+
+        i = 0
+        for data in preProcessDataXMLGPS:
+            if i < len(preProcessDataXMLGPS)-1:
+
+                gpsData.append({
+                    "GPSDateTime": data["GPSDateTime"],
+                    "GPSLatitude": data["GPSData"][0]["GPSLatitude"],
+                    "GPSLongitude": data["GPSData"][0]["GPSLongitude"],
+                    "GPSAltitude": data["GPSData"][0]["GPSAltitude"],
+                })
+
+                betweenTimes = self._getTimesBetween(
+                    preProcessDataXMLGPS[i]["GPSDateTime"], 
+                    preProcessDataXMLGPS[i+1]["GPSDateTime"], 
+                    frameRate
+                )
+                gpsIncFr = int((frameRate-1)/2)
+                gpsInc = 2-1
+                for bt in betweenTimes:
+                    log("{} {} {} {} {}".format("#", i, gpsInc, data["GPSDateTime"], len(data["GPSData"])), "error", self._config)
+                    gpsData.append({
+                        "GPSDateTime": datetime.datetime.strftime(bt, "%Y:%m:%d %H:%M:%S.%f"),
+                        "GPSLatitude": data["GPSData"][gpsInc]["GPSLatitude"],
+                        "GPSLongitude": data["GPSData"][gpsInc]["GPSLongitude"],
+                        "GPSAltitude": data["GPSData"][gpsInc]["GPSAltitude"],
+                    })
+                    gpsInc = gpsInc + gpsIncFr
+            else:
+                gpsData.append({
+                    "GPSDateTime": data["GPSDateTime"],
+                    "GPSLatitude": data["GPSData"][0]["GPSLatitude"],
+                    "GPSLongitude": data["GPSData"][0]["GPSLongitude"],
+                    "GPSAltitude": data["GPSData"][0]["GPSAltitude"],
+                })
+                bt = datetime.datetime.strptime(data["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+                betweenTimes = self._getTimesBetween(
+                    data["GPSDateTime"], 
+                    datetime.datetime.strftime(bt + datetime.timedelta(0,1), "%Y:%m:%d %H:%M:%S.%f"), 
+                    frameRate
+                )
+                gpsIncFr = int((frameRate-1)/2)
+                gpsInc = 2-1
+                j = 0
+                for ei in range(len(gpsData), imagesCount):
+                    if gpsInc < len(data["GPSData"]):
+                        gpsData.append({
+                            "GPSDateTime": datetime.datetime.strftime(betweenTimes[j], "%Y:%m:%d %H:%M:%S.%f"),
+                            "GPSLatitude": data["GPSData"][gpsInc]["GPSLatitude"],
+                            "GPSLongitude": data["GPSData"][gpsInc]["GPSLongitude"],
+                            "GPSAltitude": data["GPSData"][gpsInc]["GPSAltitude"],
+                        })
+                        j = j+1
+                    else:
+                        log("No gps data available for this image.", "error", self._config)
+                    gpsInc = gpsInc + gpsIncFr
+            i = i+1
+        metaData = {
+            "gps": gpsData,
+            "json": preProcessDataJSON
+        }
+        self.__injectMetadat(metaData, images, imageFolder)
+        exit()
+        
+    def __injectMetadat(self, metaData, images, imageFolder):
+
+        gpsMetaData = metaData["gps"]
+        jsonMetaData = metaData["json"]
+
+        gpx = gpxpy.gpx.GPX()
+
+        # Create first track in our GPX:
+        gpx_track = gpxpy.gpx.GPXTrack()
+        gpx.tracks.append(gpx_track)
+
+        # Create first segment in our GPX track:
+        gpx_segment = gpxpy.gpx.GPXTrackSegment()
+        gpx_track.segments.append(gpx_segment)
+
+        for i in range(0, len(images)):
             
-            if( mdata["image"][1] =="GPS:GPSAltitudeRef"):
-                _data[mdata["image"][1]] = "\"Above Sea Level\""
-            elif( mdata["image"][1] =="GPS:GPSLatitudeRef"):
-                ref = self.latLongLocation(ref)
-                _data[mdata["image"][1]] = "\""+ref+"\""
-            elif( mdata["image"][1] =="GPS:GPSLongitudeRef"):
-                ref = self.latLongLocation(ref)
-                _data[mdata["image"][1]] = "\""+ref+"\""
+            tt = gpsMetaData[i]["GPSDateTime"].split(".")
+            t = datetime.datetime.strptime(gpsMetaData[i]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+            deg, minutes, seconds, direction = re.split('[deg\'"]+', gpsMetaData[i]["GPSLatitude"])
+            a = (float(deg) + float(minutes)/60 + float(seconds)/(60*60)) * (-1 if direction in ['W', 'S'] else 1)
+            deg, minutes, seconds, direction = re.split('[deg\'"]+', gpsMetaData[i]["GPSLongitude"])
+            b = (float(deg) + float(minutes)/60 + float(seconds)/(60*60)) * (-1 if direction in ['W', 'S'] else 1)
+            alt = gpsMetaData[i]["GPSAltitude"].split(" ")[0]
+            gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=a, longitude=b, time=t, elevation=alt))
+
+            log("{} {} {} {} {}".format(gpsMetaData[i]["GPSDateTime"], gpsMetaData[i]["GPSLatitude"], a, gpsMetaData[i]["GPSLongitude"], b), "info", self._config)
+
+            if i < len(gpsMetaData)-1:
+                t1 = datetime.datetime.strptime(gpsMetaData[i+1]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+                log("{} {} {}".format(t, t1, t1-t), "info", self._config)
+
+            cmdMetaData = [
+                '-DateTimeOriginal="{0}Z"'.format(tt[0]),
+                '-SubSecTimeOriginal="{0}"'.format(tt[1]),
+                '-SubSecDateTimeOriginal="{0}Z"'.format(".".join(tt)),
+                '-IFD0:Model="{}"'.format(jsonMetaData["DeviceName"]),
+                '-XMP-GPano:StitchingSoftware="{}"'.format(jsonMetaData["StitchingSoftware"]),
+                '-XMP-GPano:SourcePhotosCount="{}"'.format(2),
+                '-XMP-GPano:UsePanoramaViewer="{}"'.format("true"),
+                '-XMP-GPano:ProjectionType="{}"'.format(jsonMetaData["ProjectionType"]),
+                '-XMP-GPano:CroppedAreaImageHeightPixels="{}"'.format(jsonMetaData["SourceImageHeight"]),
+                '-XMP-GPano:CroppedAreaImageWidthPixels="{}"'.format(jsonMetaData["SourceImageWidth"]),
+                '-XMP-GPano:FullPanoHeightPixels="{}"'.format(jsonMetaData["SourceImageHeight"]),
+                '-XMP-GPano:FullPanoWidthPixels="{}"'.format(jsonMetaData["SourceImageWidth"]),
+                '-XMP-GPano:CroppedAreaLeftPixels="{}"'.format(0),
+                '-XMP-GPano:CroppedAreaTopPixels="{}"'.format(0),
+                '-overwrite_original'
+            ]
+            
+            cmdMetaData.append(imageFolder+os.sep+"img"+str(i+1)+".jpg")
+
+            output = self._exiftool(cmdMetaData)
+            if output.returncode != 0:
+                log(output, "error", self._config)
             else:
-                _data[mdata["image"][1]] = "\""+ref+"\""
+                log(output, "info", self._config)
 
-            _data[mdata["image"][0]] = "\""+" ".join(value)+"\""
-        data = _data
-        if len(data) > 1:
-            cmd = [] 
-            for flag in [data]:
-                for key, value in flag.items():
-                    cmd.append("-"+key+"="+value)
-            cmd.append(image)
-            output = self._exiftool(cmd, 1)
-            output = self._exiftool(['-ee', '-GPS:GPSAltitudeRef="Above Sea Level"', image])
-        return True
+        time.sleep(2)
 
-    def latLongLocation(self, x):
-        return {
-            'E': "East",
-            'W': "West",
-            'N': "North",
-            'S': "South"
-        }.get(x, "") 
-    
-    def getDateTimeFirstImageMetaData(self, data):
-        logging.info("Getting DateTime First Image Meta Data")
-        image1 = None
-        if len(data) > 0:
-            image1 = data[0]["GPSDateTime"]
-            dateTimeValue = image1.split('.')
-            if len(dateTimeValue) > 1:
-                DateTimeOriginal = dateTimeValue[0]+"Z"
-                SubSecTimeOriginal = dateTimeValue[1]
-                SubSecDateTimeOriginal = dateTimeValue[0]+"."+dateTimeValue[1]+"Z"
-                image1 = {"DateTimeOriginal":DateTimeOriginal, "SubSecTimeOriginal":SubSecTimeOriginal, "SubSecDateTimeOriginal":SubSecDateTimeOriginal}
+        gpxData = gpx.to_xml() 
+        gpxFileName = os.getcwd() + os.sep + 'VIDEO_META.gpx'
+        with open(gpxFileName, 'w') as f:
+            f.write(gpxData)
+            f.close()
+            cmd = ["-geotag", gpxFileName, "'-geotime<${datetimeoriginal}-00:00'", "-v2", '-overwrite_original', imageFolder]
+            output = self._exiftool(cmd)
+            if output.returncode != 0:
+                log(output, "error", self._config)
             else:
-                image1 = None
-        return image1
-    
-    def injectDateTimeMetadata(self, img, data):
-        logging.info("Injecting Date Time Meta data")
-        image1     = self.getDateTimeFirstImageMetaData(data)
-        if image1 == None:
-            return None
-        cmd = [] 
-        for flag in [image1]:
-            for key, value in flag.items():
-                cmd.append("-"+key+"=\""+value+"\"")
-        cmd.append(img)
-        output = self._exiftool(cmd)
-        return output
-    
-    def injectMetadata(self, root):
-        logging.info('Injecting metadata Spherical & additional')
-        spherical  = self.getSphericalMetaData(root)
-        additional = self.getAdditionalMetaData(root)
-        data = [
-            spherical,
-            additional
-        ]
-        cmd = [] 
-        for flag in data:
-            for key, value in flag.items():
-                if (type(value) == int) or (type(value) == float):
-                    cmd.append("-"+key+"="+str(value))
-                else:
-                    cmd.append("-"+key+"=\""+str(value)+"\"")
-        cmd.append(self.__folderName)
-        output = self._exiftool(cmd, 1)
+                log(output, "info", self._config)
 
-def printErrors(errors):
-    logging.info("Printing Critical/Non-Critical Errors")
-    if errors["hasErrors"] == True:
-        if errors["criticalErrors"] == True:
-            for k, v in errors["critical"].items():
-                if v["errorStatus"] == True:
-                    print("Critical Error: {}".format(v["error"]))
-            exit('Script stopped due to critical error!')
-        elif errors["nonCriticalErrors"] == True:
-            for k, v in errors["non_critical"].items():
-                if v["errorStatus"] == True:
-                    print("Non-Critical Error: {}".format(v["error"]))
 
+    def __validate(self, args):
+        frameRate = 5
+        debug = False
+        quiet = True
+        check = self._checkFileExists(args.input)
+        if check == False:
+            exit("{} does not exists.".format(args.input))
+
+        if (args.frame_rate is not None):
+            frameRate = int(args.frame_rate)
+            if frameRate > 10:
+                exit("Please use framerate value less than 10.")
+        else:
+            print("frameRate is not provided, so using default framerate of 5 frames per second")
+
+        if (args.debug is not None):
+            debug = True
+        else:
+            print("debug value is not provided, so by default debugging is off.")
+
+        if (args.quiet is not None):
+            quiet = False
+        else:
+            print("verbosity is not enabled, so by default is quiet.")
+
+        self._config = {
+            "frameRate": frameRate,
+            "debug": debug,
+            "quiet": quiet,
+        }
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--input", type=str, help="Please input a valid video file.")
+    parser.add_argument("-f", "--frame-rate", type=str, help="Frame rate for ffmpeg command.")
+    parser.add_argument("-d", "--debug", type=str, help="Print out debuggin info.")
+    parser.add_argument("-q", "--quiet", type=str, help="Use this option to enable verbosity or not. -q 0 is quiet and -q 1 is verbose. Default is 0.")
     args = parser.parse_args()
     if (args.input is not None):
         logging.basicConfig(filename='trekview-gopro.log', format='%(asctime)s %(levelname)s: LineNo:%(lineno)d %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.DEBUG)
-        logging.info('Script started for file {}'.format(args.input))
-        preProcess = TrekviewPreProcess(args.input)
-        data = preProcess.getPreProcessData()
-        data["Timewrap"] = preProcess._TimeWrap
-        preProcessValidated = preProcess.validatePreProcessData()
-        print(data)
-        printErrors(preProcessValidated)
-        mp4Video = TrekviewProcessMp4(args.input, data)
-        print(data)
-        printErrors(preProcessValidated)
-        print("Done! You can now see your images in Img folder.")
-        
+        goProMp4 = TrekViewGoProMp4(args)
+    else:
+        exit("Please use a valid video file.")
