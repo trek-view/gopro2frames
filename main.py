@@ -397,8 +397,8 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                     preProcessDataXMLGPS[i+1]["GPSDateTime"], 
                     frameRate
                 )
-                gpsIncFr = int((frameRate-1)/2)
-                gpsInc = 2-1
+                gpsIncFr = frameRate-1
+                gpsInc = frameRate-1
                 for bt in betweenTimes:
                     log("{} {} {} {} {}".format("#", i, gpsInc, data["GPSDateTime"], len(data["GPSData"])), "error", self._config)
                     gpsData.append({
@@ -421,8 +421,8 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                     datetime.datetime.strftime(bt + datetime.timedelta(0,1), "%Y:%m:%d %H:%M:%S.%f"), 
                     frameRate
                 )
-                gpsIncFr = int((frameRate-1)/2)
-                gpsInc = 2-1
+                gpsIncFr = frameRate-1
+                gpsInc = frameRate-1
                 j = 0
                 for ei in range(len(gpsData), imagesCount):
                     if gpsInc < len(data["GPSData"]):
@@ -434,9 +434,12 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                         })
                         j = j+1
                     else:
+                        os.unlink(imageFolder+os.sep+"img{}.jpg".format(ei+1))
                         log("No gps data available for this image.", "error", self._config)
                     gpsInc = gpsInc + gpsIncFr
             i = i+1
+        images = fnmatch.filter(os.listdir(imageFolder), '*.jpg')
+        imagesCount = len(images)
         metaData = {
             "gps": gpsData,
             "json": preProcessDataJSON
