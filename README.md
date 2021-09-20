@@ -4,7 +4,9 @@ Converts GoPro mp4s with equirectangular projections into single frames with cor
 
 ## Installation
 
+```
 pip install -r requirements.txt
+```
 
 ## Usage
 
@@ -32,16 +34,24 @@ This script has currently been tested with the following GoPro cameras:
 
 To ensure the video can be processed, the following checks are applied.
 
+**Determine projection type**
+
 For .mp4 videos we can determine video is spherical (equirectangular) if it contains the following metatag `<XMP-GSpherical:ProjectionType>equirectangular</XMP-GSpherical:ProjectionType>`.
 
-Once type (360/non-360) has been determined, we next check it contains telemetry from GoPro by identifying the following metatag `<TrackN:MetaFormat>gpmd</TrackN:MetaFormat>`. _Note: TrackN where N = track number, which varies between GoPro cameras._ 
+**If contains GoPro telemetry**
+
+Once projection type (360/non-360) has been determined, we next check it contains telemetry from GoPro by identifying the following metatag `<TrackN:MetaFormat>gpmd</TrackN:MetaFormat>`. _Note: TrackN where N = track number, which varies between GoPro cameras._ 
 
 If the script fails any of these checks, you will see an error returned.
+
+**Check not already extracted**
+
+The script will also look in 
 
 ### Options
 
 ```
-$  gopro-frame-maker.py [options] VIDEO_NAME.mp4
+$ gopro-frame-maker.py [options] VIDEO_NAME.mp4
 ```
 
 Options:
@@ -56,14 +66,27 @@ Options:
 	* `3`
 	* `4`
 	* `5`
-* -d enable debug mode, default: off.  Options available:
-	* `true`
-	* `false` 
+* -d enable debug mode, default: false. If flag is passed, will be set to true.
 
 #### Examples (MacOS)
 
-##### TODO
+##### Extract at a frame rate of 1 FPS
 
+```
+$ gopro-frame-maker.py -r 1 GS018422.mp4
+```
+
+##### Run with debug mode
+
+```
+$ gopro-frame-maker.py -d GS018422.mp4
+```
+
+##### Extract frames at lowest quality
+
+```
+$ gopro-frame-maker.py -q 6 GS018422.mp4
+```
 
 ## Support
 
