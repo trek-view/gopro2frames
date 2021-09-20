@@ -436,6 +436,13 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         frameRate = args.frame_rate
         imageFolder = os.getcwd() + os.sep + os.path.basename(filename).split(".")[0]
 
+        if os.path.exists(imageFolder):
+            inp = input("It looks like this video has already been processed (there is an existing directory for this video). Are you sure you wish to continue? Any existing conversion data will be deleted.(y/n):")
+            if inp != "y":
+                self.Log("There is an existing directory for this ({}) video".format(imageFolder), "critical")
+                exit(1)
+            shutil.rmtree(imageFolder)
+
         preProcessDataJSON = self._preProcessExifToolExecute(args.input)
         if preProcessDataJSON is None:
             self.Log("Unable to get metadata from video.", "critical")
@@ -639,10 +646,10 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("input", type=str, help="Please input a valid video file.")
+    parser.add_argument("input", type=str, help="Input a valid video file.")
     parser.add_argument("-f", "--frame-rate", type=int, help="Frame rate for ffmpeg command.", default=5)
-    parser.add_argument("-d", "--debug", action='store_true', help="Print out debuggin info.")
-    parser.add_argument("-v", "--verbose", action='store_true', help="Use this option to enable verbosity or not.")
+    parser.add_argument("-d", "--debug", action='store_true', help="Print out debuggin information.")
+    parser.add_argument("-v", "--verbose", action='store_true', help="Print out verbose information.")
     args = parser.parse_args()
     logging.basicConfig(filename='trekview-gopro.self.Log', format='%(asctime)s %(levelname)s: LineNo:%(lineno)d %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.DEBUG)
     goProMp4 = TrekViewGoProMp4(args)
