@@ -410,13 +410,14 @@ class TrekviewProcessMp4(TrekviewCommand):
         else:
             return True
 
-    def _getTimesBetween(self, start, end, frameRate):
+    def _getTimesBetween(self, start, end, frameRate, frlen):
         t_start = datetime.datetime.strptime(start, "%Y:%m:%d %H:%M:%S.%f")
         t_end = datetime.datetime.strptime(end, "%Y:%m:%d %H:%M:%S.%f")
         diff = t_end - t_start
         diff0 = diff/float(frameRate)
         times = []
         t = t_start
+        frange = round(frlen/frameRate)
         for i in range(0, frameRate-1):
             t = t+diff0
             times.append(t)
@@ -509,10 +510,11 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                 betweenTimes = self._getTimesBetween(
                     preProcessDataXMLGPS[i]["GPSDateTime"], 
                     preProcessDataXMLGPS[i+1]["GPSDateTime"], 
-                    frameRate
+                    frameRate,
+                    len(data["GPSData"])
                 )
-                gpsIncFr = frameRate-1
-                gpsInc = frameRate-1
+                gpsIncFr = round(len(data["GPSData"])/frameRate)
+                gpsInc = round(len(data["GPSData"])/frameRate)
                 for bt in betweenTimes:
                     gpsData.append({
                         "GPSDateTime": datetime.datetime.strftime(bt, "%Y:%m:%d %H:%M:%S.%f"),
@@ -532,10 +534,11 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                 betweenTimes = self._getTimesBetween(
                     data["GPSDateTime"], 
                     datetime.datetime.strftime(bt + datetime.timedelta(0,1), "%Y:%m:%d %H:%M:%S.%f"), 
-                    frameRate
+                    frameRate,
+                    len(data["GPSData"])
                 )
-                gpsIncFr = frameRate-1
-                gpsInc = frameRate-1
+                gpsIncFr = round(len(data["GPSData"])/frameRate)
+                gpsInc = round(len(data["GPSData"])/frameRate)
                 j = 0
                 for ei in range(len(gpsData), imagesCount):
                     if gpsInc < len(data["GPSData"]):
@@ -561,7 +564,6 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             "json": preProcessDataJSON
         }
         self.__injectMetadat(metaData, images, imageFolder)
-        exit()
         
     def __injectMetadat(self, metaData, images, imageFolder):
 
