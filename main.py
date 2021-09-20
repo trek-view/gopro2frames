@@ -19,6 +19,10 @@ class TrekviewCommand():
         text = re.sub("'", '', html.unescape(text))
         return html.escape(text)
 
+    def latLngToDecimal(self, latLng):
+        deg, minutes, seconds, direction = re.split('[deg\'"]+', latLng)
+        return (float(deg) + float(minutes)/60 + float(seconds)/(60*60)) * (-1 if direction in ['W', 'S'] else 1)
+
     def Log(self, msg, level="info"):
         if self.__config["debug"] == True and (self.__config["verbose"] == True):
             print(msg)
@@ -95,16 +99,44 @@ class TrekviewPreProcess(TrekviewCommand):
     __TimeWrap = False
     def _preProcessExifToolExecute(self, filename):
         self.Log("Getting Pre Process Info", "info")
-        cmd = ["-ee", "-j", "-DeviceName", "-ProjectionType", "-MetaFormat", "-StitchingSoftware", "-VideoFrameRate", "-SourceImageHeight", "-SourceImageWidth", filename]
+        cmd = ["-ee", "-j", "-G1:3","-DeviceName", "-ProjectionType", "-MetaFormat", "-StitchingSoftware", "-VideoFrameRate", "-SourceImageHeight", "-SourceImageWidth", "-FileSize", "-FileType", "-FileTypeExtension", "-CompressorName", filename]
         try:
             output = self._exiftool(cmd)
             if output.returncode == 0:
                 exifPreProcessData = json.loads(output.stdout.decode('utf-8',"ignore"))
                 if len(exifPreProcessData) > 0:
-                    preProcessValidated = self.__validatePreProcessData(exifPreProcessData[0])
-                    exifPreProcessData[0]["Timewrap"] = self.__TimeWrap
+                    
+                    jsonData = {
+                        "SourceFile": "",
+                        "DeviceName": "",
+                        "StitchingSoftware": "",
+                        "ProjectionType": "",
+                        "MetaFormat": "",
+                        "VideoFrameRate": "",
+                        "SourceImageHeight": "",
+                        "SourceImageWidth": "",
+                        "FileSize": "",
+                        "FileType": "",
+                        "FileTypeExtension": "",
+                        "CompressorName": "",
+                    }
+
+                    for key, value in exifPreProcessData[0].items():
+                        keyInfo = key.split(":")
+                        kName = keyInfo[-1]
+                        if kName != "CompressorName":
+                            jsonData[kName] = value
+                    for key, value in exifPreProcessData[0].items():
+                        keyInfo = key.split(":")
+                        kName = keyInfo[-1]
+                        if kName == "CompressorName" and key == "Track1:Main:CompressorName":
+                            jsonData[kName] = value
+                            break
+
+                    preProcessValidated = self.__validatePreProcessData(jsonData)
+                    jsonData["Timewrap"] = self.__TimeWrap
                     self.__printErrors(preProcessValidated)
-                    return exifPreProcessData[0]
+                    return jsonData
                 else:
                     return None
         except Exception as e:
@@ -367,7 +399,8 @@ class TrekviewProcessMp4(TrekviewCommand):
         if os.path.exists(folder):
             shutil.rmtree(folder)
         os.makedirs(folder, exist_ok=True) 
-        cmd = ["-i", filename, "-r", str(frameRate), folder+os.sep+"img%d.jpg"]
+        __config = self.getConfig()
+        cmd = ["-i", filename, "-r", str(frameRate), __config["imageFolder"]+os.sep+"{}_%06d.jpg".format(os.path.basename(__config["imageFolder"]))]
         output = self._ffmpeg(cmd, 1)
         if output.returncode != 0:
             return False 
@@ -399,16 +432,31 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         
         self.__validate(args)
 
-        imageFolder = os.getcwd() + os.sep + 'Img'
         filename = args.input
         frameRate = args.frame_rate
+        imageFolder = os.getcwd() + os.sep + os.path.basename(filename).split(".")[0]
 
         preProcessDataJSON = self._preProcessExifToolExecute(args.input)
         if preProcessDataJSON is None:
             self.Log("Unable to get metadata from video.", "critical")
             exit("Unable to get metadata from video.")
 
+        FileType = ["MP4", "360"]
+        if preProcessDataJSON["FileType"].strip() not in FileType:
+            self.Log("The following filetype {} is not supported. Please upload only .mp4 or .360 videos.".format(preProcessDataJSON["FileType"]), "critical")
+            exit("The following filetype {} is not supported. Please upload only .mp4 or .360 videos.".format(preProcessDataJSON["FileType"]))
+        if preProcessDataJSON["FileType"].strip() == "360":
+            if preProcessDataJSON["CompressorName"] == "H.265":
+                self.Log("This does not appear to be a GoPro .360 file. Please use the .360 video created from your GoPro camera only.", "critical")
+                exit("This does not appear to be a GoPro .360 file. Please use the .360 video created from your GoPro camera only.")
+        
+        fileStat = os.stat(filename)
+        if fileStat.st_size > 1000000000:
+            self.Log("The following file {} is too large. The maximum size for a single video is 5GB".format(filename), "critical")
+            exit("The following file {} is too large. The maximum size for a single video is 5GB".format(filename))
+
         __configData["jsonData"] = preProcessDataJSON
+        __configData["imageFolder"] = imageFolder
         self.setConfig(__configData)
 
         framesBroken = self._breakIntoFrames(filename, frameRate, imageFolder)
@@ -481,9 +529,9 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                             })
                             j = j+1
                         else:
-                            os.unlink(imageFolder+os.sep+"img{}.jpg".format(ei+1))
+                            os.unlink(imageFolder+os.sep+"img{}.jpg".format(images[ei]))
                     else:
-                        os.unlink(imageFolder+os.sep+"img{}.jpg".format(ei+1))
+                        os.unlink(imageFolder+os.sep+"{}".format(images[ei]))
                         self.Log("No gps data available for this image.", "info")
                     gpsInc = gpsInc + gpsIncFr
             i = i+1
@@ -511,14 +559,14 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         gpx_segment = gpxpy.gpx.GPXTrackSegment()
         gpx_track.segments.append(gpx_segment)
 
-        for i in range(0, len(images)):
+        __config = self.getConfig()
+        i = 0
+        for img in images:
             
             tt = gpsMetaData[i]["GPSDateTime"].split(".")
             t = datetime.datetime.strptime(gpsMetaData[i]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
-            deg, minutes, seconds, direction = re.split('[deg\'"]+', gpsMetaData[i]["GPSLatitude"])
-            a = (float(deg) + float(minutes)/60 + float(seconds)/(60*60)) * (-1 if direction in ['W', 'S'] else 1)
-            deg, minutes, seconds, direction = re.split('[deg\'"]+', gpsMetaData[i]["GPSLongitude"])
-            b = (float(deg) + float(minutes)/60 + float(seconds)/(60*60)) * (-1 if direction in ['W', 'S'] else 1)
+            a = self.latLngToDecimal(gpsMetaData[i]["GPSLatitude"])
+            b = self.latLngToDecimal(gpsMetaData[i]["GPSLongitude"])
             alt = gpsMetaData[i]["GPSAltitude"].split(" ")[0]
             gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=a, longitude=b, time=t, elevation=alt))
 
@@ -533,27 +581,28 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                 '-SubSecTimeOriginal="{0}"'.format(self.removeEntities(tt[1])),
                 '-SubSecDateTimeOriginal="{0}Z"'.format(self.removeEntities(".".join(tt))),
                 '-IFD0:Model="{}"'.format(self.removeEntities(jsonMetaData["DeviceName"])),
-                '-XMP-GPano:StitchingSoftware="{}"'.format(self.removeEntities(jsonMetaData["StitchingSoftware"])),
-                '-XMP-GPano:SourcePhotosCount="{}"'.format(2),
-                '-XMP-GPano:UsePanoramaViewer="{}"'.format("true"),
-                '-XMP-GPano:ProjectionType="{}"'.format(self.removeEntities(jsonMetaData["ProjectionType"])),
-                '-XMP-GPano:CroppedAreaImageHeightPixels="{}"'.format(jsonMetaData["SourceImageHeight"]),
-                '-XMP-GPano:CroppedAreaImageWidthPixels="{}"'.format(jsonMetaData["SourceImageWidth"]),
-                '-XMP-GPano:FullPanoHeightPixels="{}"'.format(jsonMetaData["SourceImageHeight"]),
-                '-XMP-GPano:FullPanoWidthPixels="{}"'.format(jsonMetaData["SourceImageWidth"]),
-                '-XMP-GPano:CroppedAreaLeftPixels="{}"'.format(0),
-                '-XMP-GPano:CroppedAreaTopPixels="{}"'.format(0),
-                '-overwrite_original'
             ]
+            if __config["jsonData"]["ProjectionType"] == "equirectangular":
+                cmdMetaData.append('-XMP-GPano:StitchingSoftware="{}"'.format(self.removeEntities(jsonMetaData["StitchingSoftware"])))
+                cmdMetaData.append('-XMP-GPano:SourcePhotosCount="{}"'.format(2))
+                cmdMetaData.append('-XMP-GPano:UsePanoramaViewer="{}"'.format("true"))
+                cmdMetaData.append('-XMP-GPano:ProjectionType="{}"'.format(self.removeEntities(jsonMetaData["ProjectionType"])))
+                cmdMetaData.append('-XMP-GPano:CroppedAreaImageHeightPixels="{}"'.format(jsonMetaData["SourceImageHeight"]))
+                cmdMetaData.append('-XMP-GPano:CroppedAreaImageWidthPixels="{}"'.format(jsonMetaData["SourceImageWidth"]))
+                cmdMetaData.append('-XMP-GPano:FullPanoHeightPixels="{}"'.format(jsonMetaData["SourceImageHeight"]))
+                cmdMetaData.append('-XMP-GPano:FullPanoWidthPixels="{}"'.format(jsonMetaData["SourceImageWidth"]))
+                cmdMetaData.append('-XMP-GPano:CroppedAreaLeftPixels="{}"'.format(0))
+                cmdMetaData.append('-XMP-GPano:CroppedAreaTopPixels="{}"'.format(0))
+            cmdMetaData.append('-overwrite_original')
             
-            cmdMetaData.append(imageFolder+os.sep+"img"+str(i+1)+".jpg")
+            cmdMetaData.append(imageFolder+os.sep+"{}".format(str(img)))
 
             output = self._exiftool(cmdMetaData)
             if output.returncode != 0:
                 self.Log(output, "error")
             else:
                 self.Log(output, "info")
-
+            i = i+1
         time.sleep(2)
 
         gpxData = gpx.to_xml() 
@@ -572,7 +621,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
     def __validate(self, args):
         check = self._checkFileExists(args.input)
         if check == False:
-            exit("{} does not exists.".format(args.input))
+            exit("{} does not exists. Please provide a valid video file.".format(args.input))
         if (args.frame_rate is not None):
             frameRate = int(args.frame_rate)
             if frameRate >= 10:
@@ -591,12 +640,10 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("input", type=str, help="Please input a valid video file.")
-    parser.add_argument("-f", "--frame-rate", type=int, help="Frame rate for ffmpeg command.", default=1)
+    parser.add_argument("-f", "--frame-rate", type=int, help="Frame rate for ffmpeg command.", default=5)
     parser.add_argument("-d", "--debug", action='store_true', help="Print out debuggin info.")
     parser.add_argument("-v", "--verbose", action='store_true', help="Use this option to enable verbosity or not.")
     args = parser.parse_args()
-    if (args.input is not None):
-        logging.basicConfig(filename='trekview-gopro.self.Log', format='%(asctime)s %(levelname)s: LineNo:%(lineno)d %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.DEBUG)
-        goProMp4 = TrekViewGoProMp4(args)
-    else:
-        exit("Please use a valid video file.")
+    logging.basicConfig(filename='trekview-gopro.self.Log', format='%(asctime)s %(levelname)s: LineNo:%(lineno)d %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.DEBUG)
+    goProMp4 = TrekViewGoProMp4(args)
+    exit(0)
