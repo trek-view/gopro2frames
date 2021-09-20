@@ -24,7 +24,7 @@ class TrekviewCommand():
         return (float(deg) + float(minutes)/60 + float(seconds)/(60*60)) * (-1 if direction in ['W', 'S'] else 1)
 
     def Log(self, msg, level="info"):
-        if self.__config["debug"] == True and (self.__config["verbose"] == True):
+        if self.__config["debug"] == True:
             print(msg)
         if level == "info":
             logging.info(msg)
@@ -47,9 +47,12 @@ class TrekviewCommand():
                 ret = output
             else:
                 self.Log(output.stderr.decode('utf-8',"ignore"), "critical")
-                raise Exception(output)
+                raise Exception(output.stderr.decode('utf-8',"ignore"))
         except Exception as e:
-            self.Log(str(e), "critical")
+            if type(e) is TypeError:
+                logging.error(str(e))
+            else:
+                logging.error(e.stderr.decode('utf-8',"ignore"))
             ret = None
         except:
             self.Log("Error running subprocess. Please try again.", "critical")
@@ -76,8 +79,8 @@ class TrekviewCommand():
         else:
             ffmpeg = "ffmpeg"
         command.insert(0, ffmpeg)
-        if self.__config["verbose"] == False:
-            command.insert(1, "-q")
+        command.insert(len(command)-1, "-q:v")
+        command.insert(len(command)-1, str(self.__config["quality"]))
         ret = self.__subprocess(command, sh)
         if ret == None:
             self.Log("Error occured while executing ffmpeg, please see logs for more info.", "critical")
@@ -422,10 +425,17 @@ class TrekviewProcessMp4(TrekviewCommand):
 class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
     def __init__(self, args):
 
+        if (args.quality is not None):
+            if args.quality > 5:
+                quality = 6
+            elif args.quality < 2:
+                quality = 1
+            else:
+                quality = args.quality
         __configData = {
             "frameRate": args.frame_rate,
             "debug": args.debug,
-            "verbose": args.verbose,
+            "quality": quality,
         }
 
         self.setConfig(__configData)
@@ -441,6 +451,8 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             if inp != "y":
                 self.Log("There is an existing directory for this ({}) video".format(imageFolder), "critical")
                 exit(1)
+            else:
+                print("Wait while images are extracted.")
             shutil.rmtree(imageFolder)
 
         preProcessDataJSON = self._preProcessExifToolExecute(args.input)
@@ -639,18 +651,14 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         else:
             print("debug value is not provided, so by default debugging is off.")
 
-        if (args.verbose is not None):
-            quiet = False
-        else:
-            print("verbosity is not enabled, so by default is quiet.")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("input", type=str, help="Input a valid video file.")
-    parser.add_argument("-f", "--frame-rate", type=int, help="Frame rate for ffmpeg command.", default=5)
-    parser.add_argument("-d", "--debug", action='store_true', help="Print out debuggin information.")
-    parser.add_argument("-v", "--verbose", action='store_true', help="Print out verbose information.")
+    parser.add_argument("-f", "--frame-rate", type=int, help="Sets the frame rate (frames per second) for extraction, default: 5.", default=5)
+    parser.add_argument("-q", "--quality", type=int, help="Sets the extracted quality between 2-6. 1 being the highest quality (but slower processing), default: 1. This is value used for ffmpeg -q:v flag. ", default=1)
+    parser.add_argument("-d", "--debug", action='store_true', help="Enable debug mode, default: off.")
     args = parser.parse_args()
     logging.basicConfig(filename='trekview-gopro.self.Log', format='%(asctime)s %(levelname)s: LineNo:%(lineno)d %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.DEBUG)
     goProMp4 = TrekViewGoProMp4(args)
-    exit(0)
+    exit("Extraction complete, you can see your images now.")
