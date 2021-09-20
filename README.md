@@ -4,7 +4,7 @@ Converts GoPro mp4s with equirectangular projections into single frames with cor
 
 ## Installation
 
-TODO 
+pip install -r requirements.txt
 
 ## Usage
 
