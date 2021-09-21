@@ -413,6 +413,7 @@ class TrekviewProcessMp4(TrekviewCommand):
             #os.unlink(xmlFileName)
             return gpsData
         return []
+
     def _breakIntoFrames(self, filename, frameRate, folderPath, imageFolder):
         if os.path.exists(folderPath):
             shutil.rmtree(folderPath)
@@ -426,6 +427,7 @@ class TrekviewProcessMp4(TrekviewCommand):
             return True
 
     def _getTimesBetween(self, start, end, frameRate, frlen):
+        print(start, end)
         t_start = datetime.datetime.strptime(start, "%Y:%m:%d %H:%M:%S.%f")
         t_end = datetime.datetime.strptime(end, "%Y:%m:%d %H:%M:%S.%f")
         diff = t_end - t_start
@@ -502,6 +504,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         i = 0
         iCounter = 0
         for data in preProcessDataXMLGPS:
+            print("****")
             bt1 = preProcessDataXMLGPS[i]["GPSDateTime"]
             if i < len(preProcessDataXMLGPS)-1:
                 bt2 = preProcessDataXMLGPS[i+1]["GPSDateTime"]
@@ -520,7 +523,13 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             gpsInc = 0
             print("****")
             for bt in betweenTimes:
-                print(gpsInc, len(data["GPSData"]), datetime.datetime.strftime(bt, "%Y:%m:%d %H:%M:%S.%f"), gpsInc < len(data["GPSData"]))
+                if gpsInc < len(data["GPSData"]):
+                    lat = data["GPSData"][gpsInc]["GPSLatitude"]
+                    lng = data["GPSData"][gpsInc]["GPSLongitude"]
+                else:
+                    lat = "N/A"
+                    lng = "N/A"
+                print(gpsInc, len(data["GPSData"]), datetime.datetime.strftime(bt, "%Y:%m:%d %H:%M:%S.%f"), gpsInc < len(data["GPSData"]), "\""+lat+"\",", "\""+lng+"\"")
                 if gpsInc < len(data["GPSData"]):
                     gpsData.append({
                         "GPSDateTime": datetime.datetime.strftime(bt, "%Y:%m:%d %H:%M:%S.%f"),
@@ -533,6 +542,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                     self.Log("File deleted as no gps data available. "+imageFolderPath+os.sep+"{}".format(images[iCounter]), "error")
                     os.unlink(imageFolderPath+os.sep+"{}".format(images[iCounter]))
                 gpsInc = gpsInc + gpsIncFr
+            print("increment: {}, totalImagesCount: {}, timesInBetween: {}, totalGPSPoints: {}".format(gpsIncFr, imagesCount, len(betweenTimes), len(data["GPSData"])))
 
             i = i+1
         
