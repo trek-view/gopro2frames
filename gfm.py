@@ -2,7 +2,11 @@ import subprocess, argparse, platform, logging, datetime, fnmatch, shutil, shlex
 from pathlib import Path
 from lxml import etree
 from os import walk
+import itertools
 import gpxpy
+
+def loading():
+    return itertools.cycle(['-', '/', '|', '\\'])
 
 class TrekviewCommand():
     def __init__(self, config):
@@ -107,6 +111,7 @@ class TrekviewPreProcess(TrekviewCommand):
             output = self._exiftool(cmd)
             if output.returncode == 0:
                 exifPreProcessData = json.loads(output.stdout.decode('utf-8',"ignore"))
+                
                 if len(exifPreProcessData) > 0:
                     
                     jsonData = {
@@ -114,7 +119,7 @@ class TrekviewPreProcess(TrekviewCommand):
                         "DeviceName": "",
                         "StitchingSoftware": "",
                         "ProjectionType": "",
-                        "MetaFormat": "",
+                        "MetaFormat": [],
                         "VideoFrameRate": "",
                         "SourceImageHeight": "",
                         "SourceImageWidth": "",
@@ -122,22 +127,35 @@ class TrekviewPreProcess(TrekviewCommand):
                         "FileType": "",
                         "FileTypeExtension": "",
                         "CompressorName": "",
+                        "Track": "Track3",
                     }
 
                     for key, value in exifPreProcessData[0].items():
                         keyInfo = key.split(":")
                         kName = keyInfo[-1]
                         if kName != "CompressorName":
-                            jsonData[kName] = value
+                            if kName == "MetaFormat":
+                                jsonData[kName].append(value)
+                                if value == "gpmd":
+                                    jsonData["Track"] = keyInfo[0]
+                            else:
+                                jsonData[kName] = value
+                    
                     for key, value in exifPreProcessData[0].items():
                         keyInfo = key.split(":")
                         kName = keyInfo[-1]
                         if kName == "CompressorName" and key == "Track1:Main:CompressorName":
                             jsonData[kName] = value
                             break
-
                     preProcessValidated = self.__validatePreProcessData(jsonData)
-                    jsonData["Timewrap"] = self.__TimeWrap
+                    if (jsonData["ProjectionType"] == "equirectangular") and self.__checkMetaFormat and jsonData["DeviceName"].strip() == 'GoPro Max':
+                        self.__TimeWrap = True
+                        jsonData["Timewrap"] = self.__TimeWrap
+                        #jsonData["Track"] = "Track2"
+                    else:
+                        self.__TimeWrap = False
+                        jsonData["Timewrap"] = self.__TimeWrap
+
                     self.__printErrors(preProcessValidated)
                     return jsonData
                 else:
@@ -158,6 +176,9 @@ class TrekviewPreProcess(TrekviewCommand):
         if 'ProjectionType' in data:
             if data['ProjectionType'] == 'equirectangular':
                 return True
+            else:
+                if self.__checkMetaFormat(data):
+                    return True
             return False
         else:
             return False
@@ -186,7 +207,7 @@ class TrekviewPreProcess(TrekviewCommand):
     def __checkMetaFormat(self, data):
         self.Log("Checking Pre Process Meta Format", "info")
         if 'MetaFormat' in data:
-            if data['MetaFormat'] == "gpmd":
+            if "gpmd" in data['MetaFormat']:
                 return True
             return False
         else:
@@ -331,10 +352,9 @@ class TrekviewPreProcess(TrekviewCommand):
 
 class TrekviewProcessMp4(TrekviewCommand):
 
-    def __getGPSw(self, el, nsmap, Timewrap=False):
-        Track = "Track3"
-        if Timewrap == True:
-            Track = "Track2"
+    def __getGPSw(self, el, nsmap):
+        __config = self.getConfig()
+        Track = __config["jsonData"]["Track"]
         data = {"GPSDateTime": "", "GPSData":[]}
         if el == None:
             return None
@@ -361,12 +381,7 @@ class TrekviewProcessMp4(TrekviewCommand):
             self.Log("Unable to get metadata information", "critical")
             exit("Unable to get metadata information")
         __config = self.getConfig()
-        Track = "Track3"
-        Timewrap = False
-        if (__config["jsonData"]["Timewrap"] == True) and (__config["jsonData"]["Device"] == "GoPro Max"):
-            Track = "Track2"
-            Timewrap = True
-
+        Track = __config["jsonData"]["Track"]
         xmlData = output.stdout.decode('utf-8',"ignore")
         gpsData = []
         xmlFileName = os.getcwd() + os.sep + 'VIDEO_META.xml'
@@ -377,10 +392,9 @@ class TrekviewProcessMp4(TrekviewCommand):
             tree = etree.parse(xmlFileName)
             root = tree.getroot()
             nsmap = root[0].nsmap
-
             for el in root[0]:
                 if el.tag == "{"+nsmap[Track]+"}GPSDateTime":
-                    data = self.__getGPSw(el, nsmap, Timewrap)
+                    data = self.__getGPSw(el, nsmap)
                     datag = []
                     j = 0
                     for i in range(0, len(data["GPSData"])):
@@ -396,14 +410,15 @@ class TrekviewProcessMp4(TrekviewCommand):
                         "GPSDateTime": data["GPSDateTime"],
                         "GPSData": datag
                     })
+            os.unlink(xmlFileName)
             return gpsData
         return []
-    def _breakIntoFrames(self, filename, frameRate, folder):
-        if os.path.exists(folder):
-            shutil.rmtree(folder)
-        os.makedirs(folder, exist_ok=True) 
+    def _breakIntoFrames(self, filename, frameRate, folderPath, imageFolder):
+        if os.path.exists(folderPath):
+            shutil.rmtree(folderPath)
+        os.makedirs(folderPath, exist_ok=True) 
         __config = self.getConfig()
-        cmd = ["-i", filename, "-r", str(frameRate), __config["imageFolder"]+os.sep+"{}_%06d.jpg".format(os.path.basename(__config["imageFolder"]))]
+        cmd = ["-i", filename, "-r", str(frameRate), folderPath+os.sep+"{}_%06d.jpg".format(imageFolder)]
         output = self._ffmpeg(cmd, 1)
         if output.returncode != 0:
             return False 
@@ -424,39 +439,25 @@ class TrekviewProcessMp4(TrekviewCommand):
         return times
 
 class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
-    def __init__(self, args):
+    def __init__(self, args, dateTimeCurrent):
 
-        if (args.quality is not None):
-            if args.quality > 5:
-                quality = 6
-            elif args.quality < 2:
-                quality = 1
-            else:
-                quality = args.quality
         __configData = {
             "frameRate": args.frame_rate,
             "debug": args.debug,
-            "quality": quality,
+            "quality": args.quality,
         }
 
         self.setConfig(__configData)
-        
+
         self.__validate(args)
 
         filename = args.input
         frameRate = args.frame_rate
-        imageFolder = os.getcwd() + os.sep + os.path.basename(filename).split(".")[0]
-
-        if os.path.exists(imageFolder):
-            inp = input("It looks like this video has already been processed (there is an existing directory for this video). Are you sure you wish to continue? Any existing conversion data will be deleted.(y/n):")
-            if inp != "y":
-                self.Log("There is an existing directory for this ({}) video".format(imageFolder), "critical")
-                exit(1)
-            else:
-                print("Wait while images are extracted.")
-            shutil.rmtree(imageFolder)
+        imageFolder = os.path.basename(filename).split(".")[0]
+        imageFolderPath = os.getcwd() + os.sep + imageFolder+"_"+dateTimeCurrent
 
         preProcessDataJSON = self._preProcessExifToolExecute(args.input)
+
         if preProcessDataJSON is None:
             self.Log("Unable to get metadata from video.", "critical")
             exit("Unable to get metadata from video.")
@@ -477,14 +478,16 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
 
         __configData["jsonData"] = preProcessDataJSON
         __configData["imageFolder"] = imageFolder
+        __configData["imageFolderPath"] = imageFolderPath
         self.setConfig(__configData)
 
-        framesBroken = self._breakIntoFrames(filename, frameRate, imageFolder)
+        framesBroken = self._breakIntoFrames(filename, frameRate, imageFolderPath, imageFolder)
         if framesBroken == False:
             self.Log("Unable to extract frames from video.", "critical")
             exit("Unable to extract frames from video.")
-        images = fnmatch.filter(os.listdir(imageFolder), '*.jpg')
+        images = fnmatch.filter(os.listdir(imageFolderPath), '*.jpg')
         imagesCount = len(images)
+        
         preProcessDataXMLGPS = self._processXMLGPS(args.input)
         if len(preProcessDataXMLGPS) <= 0:
             self.Log("Unable to get metadata from video.", "critical")
@@ -551,19 +554,19 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                             })
                             j = j+1
                         else:
-                            os.unlink(imageFolder+os.sep+"img{}.jpg".format(images[ei]))
+                            os.unlink(imageFolderPath+os.sep+"img{}.jpg".format(images[ei]))
                     else:
-                        os.unlink(imageFolder+os.sep+"{}".format(images[ei]))
+                        os.unlink(imageFolderPath+os.sep+"{}".format(images[ei]))
                         self.Log("No gps data available for this image.", "info")
                     gpsInc = gpsInc + gpsIncFr
             i = i+1
-        images = fnmatch.filter(os.listdir(imageFolder), '*.jpg')
+        images = fnmatch.filter(os.listdir(imageFolderPath), '*.jpg')
         imagesCount = len(images)
         metaData = {
             "gps": gpsData,
             "json": preProcessDataJSON
         }
-        self.__injectMetadat(metaData, images, imageFolder)
+        self.__injectMetadat(metaData, images, imageFolderPath)
         
     def __injectMetadat(self, metaData, images, imageFolder):
 
@@ -637,6 +640,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                 self.Log(output, "error")
             else:
                 self.Log(output, "info")
+            os.unlink(gpxFileName)
 
 
     def __validate(self, args):
@@ -645,8 +649,15 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             exit("{} does not exists. Please provide a valid video file.".format(args.input))
         if (args.frame_rate is not None):
             frameRate = int(args.frame_rate)
-            if frameRate >= 10:
-                exit("Frame rate value must be less than 10.")
+            fropts = [1,2,5]
+            if frameRate not in fropts:
+                exit("Frame rate {} is not available. Only 1, 2, 5 options are available.".format(frameRate))
+
+        if (args.quality is not None):
+            quality = int(args.quality)
+            qopts = [1,2,3,4,5]
+            if quality not in qopts:
+                exit("Extracted quality {} is not available. Only 1, 2, 3, 4, 5 options are available.".format(quality))
 
         if (args.debug is not None):
             debug = True
@@ -661,6 +672,10 @@ if __name__ == '__main__':
     parser.add_argument("-q", "--quality", type=int, help="Sets the extracted quality between 2-6. 1 being the highest quality (but slower processing), default: 1. This is value used for ffmpeg -q:v flag. ", default=1)
     parser.add_argument("-d", "--debug", action='store_true', help="Enable debug mode, default: off.")
     args = parser.parse_args()
-    logging.basicConfig(filename='trekview-gopro.self.Log', format='%(asctime)s %(levelname)s: LineNo:%(lineno)d %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.DEBUG)
-    goProMp4 = TrekViewGoProMp4(args)
+    dateTimeCurrent = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    logFolder = os.getcwd() + os.sep + "logs"
+    if not os.path.exists(logFolder):
+        os.makedirs(logFolder, exist_ok=True)
+    logging.basicConfig(filename=logFolder+os.sep+'trekview-gopro-{}.self.log'.format(dateTimeCurrent), format='%(asctime)s %(levelname)s: LineNo:%(lineno)d %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.DEBUG)
+    goProMp4 = TrekViewGoProMp4(args, dateTimeCurrent)
     exit("Extraction complete, you can see your images now.")
