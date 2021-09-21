@@ -410,7 +410,7 @@ class TrekviewProcessMp4(TrekviewCommand):
                         "GPSDateTime": data["GPSDateTime"],
                         "GPSData": datag
                     })
-            os.unlink(xmlFileName)
+            #os.unlink(xmlFileName)
             return gpsData
         return []
     def _breakIntoFrames(self, filename, frameRate, folderPath, imageFolder):
@@ -500,66 +500,42 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         gpsData = []
 
         i = 0
+        iCounter = 0
         for data in preProcessDataXMLGPS:
+            bt1 = preProcessDataXMLGPS[i]["GPSDateTime"]
             if i < len(preProcessDataXMLGPS)-1:
+                bt2 = preProcessDataXMLGPS[i+1]["GPSDateTime"]
+            else:
+                bt = datetime.datetime.strptime(data["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+                bt2 = datetime.datetime.strftime(bt + datetime.timedelta(0,1), "%Y:%m:%d %H:%M:%S.%f")
+            betweenTimes = self._getTimesBetween(
+                bt1, 
+                bt2, 
+                frameRate,
+                len(data["GPSData"])
+            )
+            betweenTimes.insert(0, datetime.datetime.strptime(preProcessDataXMLGPS[i]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f"))        
 
-                gpsData.append({
-                    "GPSDateTime": data["GPSDateTime"],
-                    "GPSLatitude": data["GPSData"][0]["GPSLatitude"],
-                    "GPSLongitude": data["GPSData"][0]["GPSLongitude"],
-                    "GPSAltitude": data["GPSData"][0]["GPSAltitude"],
-                })
-
-                betweenTimes = self._getTimesBetween(
-                    preProcessDataXMLGPS[i]["GPSDateTime"], 
-                    preProcessDataXMLGPS[i+1]["GPSDateTime"], 
-                    frameRate,
-                    len(data["GPSData"])
-                )
-                gpsIncFr = round(len(data["GPSData"])/frameRate)
-                gpsInc = round(len(data["GPSData"])/frameRate)
-                for bt in betweenTimes:
+            gpsIncFr = round(len(data["GPSData"])/frameRate)
+            gpsInc = 0
+            print("****")
+            for bt in betweenTimes:
+                print(gpsInc, len(data["GPSData"]), datetime.datetime.strftime(bt, "%Y:%m:%d %H:%M:%S.%f"), gpsInc < len(data["GPSData"]))
+                if gpsInc < len(data["GPSData"]):
                     gpsData.append({
                         "GPSDateTime": datetime.datetime.strftime(bt, "%Y:%m:%d %H:%M:%S.%f"),
                         "GPSLatitude": data["GPSData"][gpsInc]["GPSLatitude"],
                         "GPSLongitude": data["GPSData"][gpsInc]["GPSLongitude"],
                         "GPSAltitude": data["GPSData"][gpsInc]["GPSAltitude"],
                     })
-                    gpsInc = gpsInc + gpsIncFr
-            else:
-                gpsData.append({
-                    "GPSDateTime": data["GPSDateTime"],
-                    "GPSLatitude": data["GPSData"][0]["GPSLatitude"],
-                    "GPSLongitude": data["GPSData"][0]["GPSLongitude"],
-                    "GPSAltitude": data["GPSData"][0]["GPSAltitude"],
-                })
-                bt = datetime.datetime.strptime(data["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
-                betweenTimes = self._getTimesBetween(
-                    data["GPSDateTime"], 
-                    datetime.datetime.strftime(bt + datetime.timedelta(0,1), "%Y:%m:%d %H:%M:%S.%f"), 
-                    frameRate,
-                    len(data["GPSData"])
-                )
-                gpsIncFr = round(len(data["GPSData"])/frameRate)
-                gpsInc = round(len(data["GPSData"])/frameRate)
-                j = 0
-                for ei in range(len(gpsData), imagesCount):
-                    if gpsInc < len(data["GPSData"]):
-                        if j < len(betweenTimes):
-                            gpsData.append({
-                                "GPSDateTime": datetime.datetime.strftime(betweenTimes[j], "%Y:%m:%d %H:%M:%S.%f"),
-                                "GPSLatitude": data["GPSData"][gpsInc]["GPSLatitude"],
-                                "GPSLongitude": data["GPSData"][gpsInc]["GPSLongitude"],
-                                "GPSAltitude": data["GPSData"][gpsInc]["GPSAltitude"],
-                            })
-                            j = j+1
-                        else:
-                            os.unlink(imageFolderPath+os.sep+"img{}.jpg".format(images[ei]))
-                    else:
-                        os.unlink(imageFolderPath+os.sep+"{}".format(images[ei]))
-                        self.Log("No gps data available for this image.", "info")
-                    gpsInc = gpsInc + gpsIncFr
+                    iCounter = iCounter+1
+                else:
+                    self.Log("File deleted as no gps data available. "+imageFolderPath+os.sep+"{}".format(images[iCounter]), "error")
+                    os.unlink(imageFolderPath+os.sep+"{}".format(images[iCounter]))
+                gpsInc = gpsInc + gpsIncFr
+
             i = i+1
+        
         images = fnmatch.filter(os.listdir(imageFolderPath), '*.jpg')
         imagesCount = len(images)
         metaData = {
@@ -586,7 +562,10 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         __config = self.getConfig()
         i = 0
         for img in images:
-            
+            if i >= len(gpsMetaData):
+                self.Log("File deleted as no gps data available. "+imageFolder+os.sep+"{}".format(images[i]), "error")
+                os.unlink(imageFolder+os.sep+"{}".format(images[i]))
+                continue
             tt = gpsMetaData[i]["GPSDateTime"].split(".")
             t = datetime.datetime.strptime(gpsMetaData[i]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
             a = self.latLngToDecimal(gpsMetaData[i]["GPSLatitude"])
