@@ -24,20 +24,8 @@ class TrekviewCommand():
         deg, minutes, seconds, direction = re.split('[deg\'"]+', latLng)
         return (float(deg) + float(minutes)/60 + float(seconds)/(60*60)) * (-1 if direction in ['W', 'S'] else 1)
 
-    def Log(self, msg, level="info"):
-        if self.__config["debug"] == True:
-            print(msg)
-        if level == "info":
-            logging.info(msg)
-        if level == "warning":
-            logging.warning(msg)
-        if level == "error":
-            logging.error(msg)
-        if level == "critical":
-            logging.critical(msg)
-
     def __subprocess(self, command, sh=0):
-        self.Log('Executing subprocess', "info")
+        logging.info('Executing subprocess')
         ret = False
         try:
             cmd = command
@@ -47,7 +35,7 @@ class TrekviewCommand():
             if output.returncode == 0:
                 ret = output
             else:
-                self.Log(output.stderr.decode('utf-8',"ignore"), "critical")
+                logging.critical(output.stderr.decode('utf-8',"ignore"))
                 raise Exception(output.stderr.decode('utf-8',"ignore"))
         except Exception as e:
             if type(e) is TypeError:
@@ -56,12 +44,12 @@ class TrekviewCommand():
                 logging.error(e.stderr.decode('utf-8',"ignore"))
             ret = None
         except:
-            self.Log("Error running subprocess. Please try again.", "critical")
+            logging.critical("Error running subprocess. Please try again.")
             exit("Error running subprocess. Please try again.")
         return ret
 
     def _exiftool(self, command, sh=0):
-        self.Log("Starting Exiftool", "info")
+        logging.info("Starting Exiftool")
         if platform.system() == "Windows":
             exiftool = "exiftool.exe"
         else:
@@ -69,12 +57,12 @@ class TrekviewCommand():
         command.insert(0, exiftool)
         ret = self.__subprocess(command, sh)
         if ret == None:
-            self.Log("Error occured while executing exiftool.", "critical")
+            logging.critical("Error occured while executing exiftool.")
             exit("Error occured while executing exiftool.")
         return ret
 
     def _ffmpeg(self, command, sh=0):
-        self.Log("Starting Ffmpeg", "info")
+        logging.info("Starting Ffmpeg")
         if platform.system() == "Windows":
             ffmpeg = "ffmpeg.exe"
         else:
@@ -84,12 +72,12 @@ class TrekviewCommand():
         command.insert(len(command)-1, str(self.__config["quality"]))
         ret = self.__subprocess(command, sh)
         if ret == None:
-            self.Log("Error occured while executing ffmpeg, please see logs for more info.", "critical")
+            logging.critical("Error occured while executing ffmpeg, please see logs for more info.")
             exit("Error occured while executing ffmpeg, please see logs for more info.")
         return ret
 
     def _checkFileExists(self, filename):
-        self.Log("Checking if file exists", "info")
+        logging.info("Checking if file exists")
         try:
             video_file = Path(filename)
             if video_file.is_file():
@@ -102,7 +90,7 @@ class TrekviewCommand():
 class TrekviewPreProcess(TrekviewCommand):
     __TimeWrap = False
     def _preProcessExifToolExecute(self, filename):
-        self.Log("Getting Pre Process Info", "info")
+        logging.info("Getting Pre Process Info")
         cmd = ["-ee", "-j", "-G1:3","-DeviceName", "-ProjectionType", "-MetaFormat", "-StitchingSoftware", "-VideoFrameRate", "-SourceImageHeight", "-SourceImageWidth", "-FileSize", "-FileType", "-FileTypeExtension", "-CompressorName", filename]
         try:
             output = self._exiftool(cmd)
@@ -158,10 +146,10 @@ class TrekviewPreProcess(TrekviewCommand):
                 else:
                     return None
         except Exception as e:
-            self.Log(str(e), "critical")
+            logging.critical(str(e))
             exit(str(e))
         except:
-            self.Log("Unable to get video file metadata.", "critical")
+            logging.critical("Unable to get video file metadata.")
             exit("Unable to get video file metadata.")
     """
         checkProjectionType function
@@ -169,7 +157,7 @@ class TrekviewPreProcess(TrekviewCommand):
         return (True|False)
     """  
     def __checkProjectionType(self, data):
-        self.Log("Checking Pre Process Projection Type", "info")
+        logging.info("Checking Pre Process Projection Type")
         if 'ProjectionType' in data:
             if data['ProjectionType'] == 'equirectangular':
                 return True
@@ -186,7 +174,7 @@ class TrekviewPreProcess(TrekviewCommand):
         return (True|False)
     """  
     def __checkDeviceName(self, data):
-        self.Log("Checking Pre Process Device Name", "info")
+        logging.info("Checking Pre Process Device Name")
         devices = ["Fusion", "GoPro Max"]
         if 'DeviceName' in data:
             if data['DeviceName'] in devices:
@@ -202,7 +190,7 @@ class TrekviewPreProcess(TrekviewCommand):
         return (True|False)
     """  
     def __checkMetaFormat(self, data):
-        self.Log("Checking Pre Process Meta Format", "info")
+        logging.info("Checking Pre Process Meta Format")
         if 'MetaFormat' in data:
             if "gpmd" in data['MetaFormat']:
                 return True
@@ -216,7 +204,7 @@ class TrekviewPreProcess(TrekviewCommand):
         return (True|False)
     """ 
     def __checkStitchingSoftware(self, data):
-        self.Log("Checking Pre Process Stitching Software", "info")
+        logging.info("Checking Pre Process Stitching Software")
         softwares = ["Fusion Studio / GStreamer", "Spherical Metadata Tool"]
         if 'StitchingSoftware' in data:
             if data['StitchingSoftware'] in softwares:
@@ -231,7 +219,7 @@ class TrekviewPreProcess(TrekviewCommand):
         return (True|False)
     """ 
     def __checkVideoFrameRate(self, data):
-        self.Log("Checking Pre Process Video FrameRate", "info")
+        logging.info("Checking Pre Process Video FrameRate")
         if 'VideoFrameRate' in data:
             if data['VideoFrameRate'] > 5:
                 return True
@@ -246,7 +234,7 @@ class TrekviewPreProcess(TrekviewCommand):
     """ 
     def __validatePreProcessData(self, data):
         __TimeWrap = False
-        self.Log("Validate Pre Process Video", "info")
+        logging.info("Validate Pre Process Video")
         errors = {
             "hasErrors":None,
             "criticalErrors":None,
@@ -334,18 +322,18 @@ class TrekviewPreProcess(TrekviewCommand):
         return errors
     
     def __printErrors(self, errors):
-        self.Log("Printing Critical/Non-Critical Errors", "info")
+        logging.info("Printing Critical/Non-Critical Errors")
         if errors["hasErrors"] == True:
             if errors["criticalErrors"] == True:
                 for k, v in errors["critical"].items():
                     if v["errorStatus"] == True:
-                        self.Log("Critical Error: {}".format(v["error"]), "critical")
+                        logging.critical("Critical Error: {}".format(v["error"]))
                         print("Critical Error: {}".format(v["error"]))
                 exit('Script stopped due to critical error!')
             elif errors["nonCriticalErrors"] == True:
                 for k, v in errors["non_critical"].items():
                     if v["errorStatus"] == True:
-                        self.Log("Non-Critical Error: {}".format(v["error"]), "info")
+                        logging.info("Non-Critical Error: {}".format(v["error"]))
 
 class TrekviewProcessMp4(TrekviewCommand):
 
@@ -374,7 +362,7 @@ class TrekviewProcessMp4(TrekviewCommand):
     def _processXMLGPS(self, filename):
         output = self._exiftool(["-ee", "-G3", "-api", "LargeFileSupport=1", "-X", filename])
         if output is None:
-            self.Log("Unable to get metadata information", "critical")
+            logging.critical("Unable to get metadata information")
             exit("Unable to get metadata information")
         __config = self.getConfig()
         Track = __config["jsonData"]["Track"]
@@ -457,21 +445,21 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         preProcessDataJSON = self._preProcessExifToolExecute(args.input)
 
         if preProcessDataJSON is None:
-            self.Log("Unable to get metadata from video.", "critical")
+            logging.critical("Unable to get metadata from video.")
             exit("Unable to get metadata from video.")
 
         FileType = ["MP4", "360"]
         if preProcessDataJSON["FileType"].strip() not in FileType:
-            self.Log("The following filetype {} is not supported. Please upload only .mp4 or .360 videos.".format(preProcessDataJSON["FileType"]), "critical")
+            logging.critical("The following filetype {} is not supported. Please upload only .mp4 or .360 videos.".format(preProcessDataJSON["FileType"]))
             exit("The following filetype {} is not supported. Please upload only .mp4 or .360 videos.".format(preProcessDataJSON["FileType"]))
         if preProcessDataJSON["FileType"].strip() == "360":
             if preProcessDataJSON["CompressorName"] == "H.265":
-                self.Log("This does not appear to be a GoPro .360 file. Please use the .360 video created from your GoPro camera only.", "critical")
+                logging.critical("This does not appear to be a GoPro .360 file. Please use the .360 video created from your GoPro camera only.")
                 exit("This does not appear to be a GoPro .360 file. Please use the .360 video created from your GoPro camera only.")
         
         fileStat = os.stat(filename)
         if fileStat.st_size > 1000000000:
-            self.Log("The following file {} is too large. The maximum size for a single video is 5GB".format(filename), "critical")
+            logging.critical("The following file {} is too large. The maximum size for a single video is 5GB".format(filename))
             exit("The following file {} is too large. The maximum size for a single video is 5GB".format(filename))
 
         __configData["jsonData"] = preProcessDataJSON
@@ -481,14 +469,14 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
 
         framesBroken = self._breakIntoFrames(filename, frameRate, imageFolderPath, imageFolder)
         if framesBroken == False:
-            self.Log("Unable to extract frames from video.", "critical")
+            logging.critical("Unable to extract frames from video.")
             exit("Unable to extract frames from video.")
         images = fnmatch.filter(os.listdir(imageFolderPath), '*.jpg')
         imagesCount = len(images)
         
         preProcessDataXMLGPS = self._processXMLGPS(args.input)
         if len(preProcessDataXMLGPS) <= 0:
-            self.Log("Unable to get metadata from video.", "critical")
+            logging.critical("Unable to get metadata from video.")
             exit("Unable to get metadata from video.")
 
         start = datetime.datetime.strptime(preProcessDataXMLGPS[0]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
@@ -500,6 +488,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         i = 0
         iCounter = 0
         iImages = []
+        images.sort()
         for data in preProcessDataXMLGPS:
             print("****")
             bt1 = preProcessDataXMLGPS[i]["GPSDateTime"]
@@ -544,7 +533,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                         "GPSAltitude": data["GPSData"][gpsInc]["GPSAltitude"],
                     })
                 else:
-                    self.Log("File deleted as no gps data available. "+imageFolderPath+os.sep+"{}".format(images[iCounter]), "error")
+                    logging.error("File deleted as no gps data available. "+imageFolderPath+os.sep+"{}".format(images[iCounter]))
                     print("File deleted as no gps data available. "+imageFolderPath+os.sep+"{}".format(images[iCounter]))
                     os.unlink(imageFolderPath+os.sep+"{}".format(images[iCounter]))
                 iCounter = iCounter+1
@@ -576,7 +565,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         __config = self.getConfig()
 
         for img in images:
-            self.Log("# image: {}, GPSDateTime: {}, GPSLatitude: {}, GPSLongitude: {}, GPSAltitude: {}".format(img["image"], img["GPSDateTime"], img["GPSLatitude"], img["GPSLongitude"], img["GPSAltitude"]), "info")
+            logging.info("# image: {}, GPSDateTime: {}, GPSLatitude: {}, GPSLongitude: {}, GPSAltitude: {}".format(img["image"], img["GPSDateTime"], img["GPSLatitude"], img["GPSLongitude"], img["GPSAltitude"]))
             tt = img["GPSDateTime"].split(".")
             t = datetime.datetime.strptime(img["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
             a = self.latLngToDecimal(img["GPSLatitude"])
@@ -604,9 +593,9 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             cmdMetaData.append(imageFolder+os.sep+"{}".format(img["image"]))
             output = self._exiftool(cmdMetaData)
             if output.returncode != 0:
-                self.Log(output, "error")
+                logging.error(output)
             else:
-                self.Log(output, "info")
+                logging.info(output)
 
         gpxData = gpx.to_xml() 
         gpxFileName = os.getcwd() + os.sep + 'VIDEO_META.gpx'
@@ -616,9 +605,9 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             cmd = ["-geotag", gpxFileName, "'-geotime<${datetimeoriginal}-00:00'", '-overwrite_original', imageFolder]
             output = self._exiftool(cmd)
             if output.returncode != 0:
-                self.Log(output, "error")
+                logging.error(output)
             else:
-                self.Log(output, "info")
+                logging.info(output)
             os.unlink(gpxFileName)
 
 
@@ -655,6 +644,21 @@ if __name__ == '__main__':
     logFolder = os.getcwd() + os.sep + "logs"
     if not os.path.exists(logFolder):
         os.makedirs(logFolder, exist_ok=True)
-    logging.basicConfig(filename=logFolder+os.sep+'trekview-gopro-{}.self.log'.format(dateTimeCurrent), format='%(asctime)s %(levelname)s: LineNo:%(lineno)d %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.DEBUG)
+    if args.debug is True:
+        logHandlers = [
+            logging.FileHandler(logFolder+os.sep+'trekview-gopro-{}.log'.format(dateTimeCurrent)),
+            logging.StreamHandler()
+        ]
+    else:
+        logHandlers = [
+            logging.FileHandler(logFolder+os.sep+'trekview-gopro-{}.log'.format(dateTimeCurrent))
+        ]
+    logging.basicConfig(
+        level=logging.DEBUG,
+        datefmt='%m/%d/%Y %I:%M:%S %p',
+        format="%(asctime)s [%(levelname)s] [Line No.:%(lineno)d] %(message)s",
+        handlers=logHandlers
+    )
+    
     goProMp4 = TrekViewGoProMp4(args, dateTimeCurrent)
     exit("Extraction complete, you can see your images now.")
