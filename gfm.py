@@ -5,9 +5,6 @@ from os import walk
 import itertools
 import gpxpy
 
-def loading():
-    return itertools.cycle(['-', '/', '|', '\\'])
-
 class TrekviewCommand():
     def __init__(self, config):
         """"""
@@ -360,7 +357,6 @@ class TrekviewProcessMp4(TrekviewCommand):
             return None
         else:
             data["GPSDateTime"] = el.text
-        self.Log("#{}".format(el.text), "info")
         for i in range(0, 500):
             el = el.getnext()
             if el == None:
@@ -523,13 +519,15 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             gpsInc = 0
             print("****")
             for bt in betweenTimes:
+                if iCounter >= len(images):
+                    break
                 if gpsInc < len(data["GPSData"]):
                     lat = data["GPSData"][gpsInc]["GPSLatitude"]
                     lng = data["GPSData"][gpsInc]["GPSLongitude"]
                 else:
                     lat = "N/A"
                     lng = "N/A"
-                print(gpsInc, len(data["GPSData"]), datetime.datetime.strftime(bt, "%Y:%m:%d %H:%M:%S.%f"), gpsInc < len(data["GPSData"]), "\""+lat+"\",", "\""+lng+"\"")
+                print(gpsInc, len(data["GPSData"]), datetime.datetime.strftime(bt, "%Y:%m:%d %H:%M:%S.%f"), gpsInc < len(data["GPSData"]), "\""+lat+"\",", "\""+lng+"\"", "image:"+str(iCounter+1))
                 if gpsInc < len(data["GPSData"]):
                     gpsData.append({
                         "GPSDateTime": datetime.datetime.strftime(bt, "%Y:%m:%d %H:%M:%S.%f"),
@@ -537,10 +535,11 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                         "GPSLongitude": data["GPSData"][gpsInc]["GPSLongitude"],
                         "GPSAltitude": data["GPSData"][gpsInc]["GPSAltitude"],
                     })
-                    iCounter = iCounter+1
                 else:
                     self.Log("File deleted as no gps data available. "+imageFolderPath+os.sep+"{}".format(images[iCounter]), "error")
+                    print("File deleted as no gps data available. "+imageFolderPath+os.sep+"{}".format(images[iCounter]))
                     os.unlink(imageFolderPath+os.sep+"{}".format(images[iCounter]))
+                iCounter = iCounter+1
                 gpsInc = gpsInc + gpsIncFr
             print("increment: {}, totalImagesCount: {}, timesInBetween: {}, totalGPSPoints: {}".format(gpsIncFr, imagesCount, len(betweenTimes), len(data["GPSData"])))
 
