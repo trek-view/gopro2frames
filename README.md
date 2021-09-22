@@ -44,9 +44,9 @@ Once projection type (360/non-360) has been determined, we next check it contain
 
 If the script fails any of these checks, you will see an error returned.
 
-**Check not already extracted**
+### Logic
 
-The script will also look in 
+[To read how this script works, read this](https://guides.trekview.org/explorer/developer-docs/sequence-functions/process/gopro-video-telemetry).
 
 ### Options
 
@@ -66,6 +66,12 @@ Options:
 	* `3`
 	* `4`
 	* `5`
+* - t enables timewarp mode. You NEED to use this if video was shot in timewarp mode, else telemetry will be inaccurate. You must also pass the timewarp mode used. No default
+	* `2x`
+	* `5x`
+	* `10x`
+	* `15x`
+	* `30x`
 * -d enable debug mode, default: false. If flag is passed, will be set to true.
 
 #### Examples (MacOS)
@@ -85,7 +91,13 @@ $ gopro-frame-maker.py -d GS018422.mp4
 ##### Extract frames at lowest quality
 
 ```
-$ gopro-frame-maker.py -q 6 GS018422.mp4
+$ gopro-frame-maker.py -q 5 GS018422.mp4
+```
+
+##### Extract from a timewarp video shot at 5x speed
+
+```
+$ gopro-frame-maker.py -t 5x GS018422.mp4
 ```
 
 ## Support
