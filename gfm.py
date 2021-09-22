@@ -499,6 +499,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
 
         i = 0
         iCounter = 0
+        iImages = []
         for data in preProcessDataXMLGPS:
             print("****")
             bt1 = preProcessDataXMLGPS[i]["GPSDateTime"]
@@ -535,6 +536,13 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                         "GPSLongitude": data["GPSData"][gpsInc]["GPSLongitude"],
                         "GPSAltitude": data["GPSData"][gpsInc]["GPSAltitude"],
                     })
+                    iImages.append({
+                        "image": images[iCounter],
+                        "GPSDateTime": datetime.datetime.strftime(bt, "%Y:%m:%d %H:%M:%S.%f"),
+                        "GPSLatitude": data["GPSData"][gpsInc]["GPSLatitude"],
+                        "GPSLongitude": data["GPSData"][gpsInc]["GPSLongitude"],
+                        "GPSAltitude": data["GPSData"][gpsInc]["GPSAltitude"],
+                    })
                 else:
                     self.Log("File deleted as no gps data available. "+imageFolderPath+os.sep+"{}".format(images[iCounter]), "error")
                     print("File deleted as no gps data available. "+imageFolderPath+os.sep+"{}".format(images[iCounter]))
@@ -544,16 +552,13 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             print("increment: {}, totalImagesCount: {}, timesInBetween: {}, totalGPSPoints: {}".format(gpsIncFr, imagesCount, len(betweenTimes), len(data["GPSData"])))
 
             i = i+1
-        
-        images = fnmatch.filter(os.listdir(imageFolderPath), '*.jpg')
-        imagesCount = len(images)
         metaData = {
             "gps": gpsData,
             "json": preProcessDataJSON
         }
-        self.__injectMetadat(metaData, images, imageFolderPath)
+        self.__injectMetadata(metaData, iImages, imageFolderPath)
         
-    def __injectMetadat(self, metaData, images, imageFolder):
+    def __injectMetadata(self, metaData, images, imageFolder):
 
         gpsMetaData = metaData["gps"]
         jsonMetaData = metaData["json"]
@@ -569,25 +574,15 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         gpx_track.segments.append(gpx_segment)
 
         __config = self.getConfig()
-        i = 0
+
         for img in images:
-            if i >= len(gpsMetaData):
-                self.Log("File deleted as no gps data available. "+imageFolder+os.sep+"{}".format(images[i]), "error")
-                os.unlink(imageFolder+os.sep+"{}".format(images[i]))
-                continue
-            tt = gpsMetaData[i]["GPSDateTime"].split(".")
-            t = datetime.datetime.strptime(gpsMetaData[i]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
-            a = self.latLngToDecimal(gpsMetaData[i]["GPSLatitude"])
-            b = self.latLngToDecimal(gpsMetaData[i]["GPSLongitude"])
-            alt = gpsMetaData[i]["GPSAltitude"].split(" ")[0]
+            self.Log("# image: {}, GPSDateTime: {}, GPSLatitude: {}, GPSLongitude: {}, GPSAltitude: {}".format(img["image"], img["GPSDateTime"], img["GPSLatitude"], img["GPSLongitude"], img["GPSAltitude"]), "info")
+            tt = img["GPSDateTime"].split(".")
+            t = datetime.datetime.strptime(img["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+            a = self.latLngToDecimal(img["GPSLatitude"])
+            b = self.latLngToDecimal(img["GPSLongitude"])
+            alt = img["GPSAltitude"].split(" ")[0]
             gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=a, longitude=b, time=t, elevation=alt))
-
-            self.Log("{} {} {} {} {}".format(gpsMetaData[i]["GPSDateTime"], gpsMetaData[i]["GPSLatitude"], a, gpsMetaData[i]["GPSLongitude"], b), "info")
-
-            if i < len(gpsMetaData)-1:
-                t1 = datetime.datetime.strptime(gpsMetaData[i+1]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
-                self.Log("{} {} {}".format(t, t1, t1-t), "info")
-
             cmdMetaData = [
                 '-DateTimeOriginal="{0}Z"'.format(self.removeEntities(tt[0])),
                 '-SubSecTimeOriginal="{0}"'.format(self.removeEntities(tt[1])),
@@ -606,16 +601,12 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                 cmdMetaData.append('-XMP-GPano:CroppedAreaLeftPixels="{}"'.format(0))
                 cmdMetaData.append('-XMP-GPano:CroppedAreaTopPixels="{}"'.format(0))
             cmdMetaData.append('-overwrite_original')
-            
-            cmdMetaData.append(imageFolder+os.sep+"{}".format(str(img)))
-
+            cmdMetaData.append(imageFolder+os.sep+"{}".format(img["image"]))
             output = self._exiftool(cmdMetaData)
             if output.returncode != 0:
                 self.Log(output, "error")
             else:
                 self.Log(output, "info")
-            i = i+1
-        time.sleep(2)
 
         gpxData = gpx.to_xml() 
         gpxFileName = os.getcwd() + os.sep + 'VIDEO_META.gpx'
