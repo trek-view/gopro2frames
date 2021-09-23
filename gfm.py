@@ -134,7 +134,7 @@ class TrekviewPreProcess(TrekviewCommand):
                             break
                     preProcessValidated = self.__validatePreProcessData(jsonData)
                     if (jsonData["ProjectionType"] == "equirectangular") and self.__checkMetaFormat and jsonData["DeviceName"].strip() == 'GoPro Max':
-                        self.__TimeWrap = True
+                        self.__TimeWrap = False
                         jsonData["Timewrap"] = self.__TimeWrap
                         #jsonData["Track"] = "Track2"
                     else:
@@ -394,7 +394,7 @@ class TrekviewProcessMp4(TrekviewCommand):
                         "GPSDateTime": data["GPSDateTime"],
                         "GPSData": datag
                     })
-            #os.unlink(xmlFileName)
+            os.unlink(xmlFileName)
             return gpsData
         return []
 
@@ -482,17 +482,69 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         if len(preProcessDataXMLGPS) <= 0:
             logging.critical("Unable to get metadata from video.")
             exit("Unable to get metadata from video.")
-
-        start = datetime.datetime.strptime(preProcessDataXMLGPS[0]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
-        end = datetime.datetime.strptime(preProcessDataXMLGPS[-1]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
-        duration = end - start
+        images.sort()
+        if args.time_warp is not None:
+            iImages = self.extractTimewrapXMLData(preProcessDataXMLGPS, images, frameRate, copy.deepcopy(__configData))
+        else:
+            iImages = self.extractXMLData(preProcessDataXMLGPS, images, frameRate, copy.deepcopy(__configData))
         
-        gpsData = []
+        metaData = {
+            "gps": iImages,
+            "json": preProcessDataJSON
+        }
+        self.__injectMetadata(metaData, iImages, imageFolderPath)
 
+    def extractTimewrapXMLData(self, preProcessDataXMLGPS, images, frameRate, __configData):
         i = 0
         iCounter = 0
         iImages = []
-        images.sort()
+        tw = __configData["timeWarp"]
+        tdiff = tw/float(frameRate)
+        _gpsDataInitial = {}
+        initialTime = preProcessDataXMLGPS[0]["GPSDateTime"]
+        initialTime = None
+        betweenTimes = []
+        for data in preProcessDataXMLGPS:
+            dTime = datetime.datetime.strptime(data["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+            if initialTime is None:
+                initialTime = dTime
+            _gpsDataInitial[dTime] = data["GPSData"][0]
+            betweenTimes.append(dTime)
+        t  = 0
+        lst = None
+        for i in range(0, len(images)):
+            t = initialTime+datetime.timedelta(0, t) 
+            if len(betweenTimes) < 1:
+                break
+            z = min(betweenTimes, key=lambda x: abs(x - t))
+            for j in range(0, len(betweenTimes)):
+                if z == betweenTimes[j]:
+                    del betweenTimes[j]
+                    break
+            iImages.append({
+                "image": images[iCounter],
+                "GPSDateTime": datetime.datetime.strftime(z, "%Y:%m:%d %H:%M:%S.%f"),
+                "GPSLatitude": _gpsDataInitial[z]["GPSLatitude"],
+                "GPSLongitude": _gpsDataInitial[z]["GPSLongitude"],
+                "GPSAltitude": _gpsDataInitial[z]["GPSAltitude"],
+            })
+            initialTime = t
+            lst = t
+            t = tdiff
+            iCounter = iCounter+1
+
+        while iCounter < len(images):
+            logging.error("File deleted as no gps data available. "+__configData["imageFolderPath"]+os.sep+"{}".format(images[iCounter]))
+            print("File deleted as no gps data available. "+__configData["imageFolderPath"]+os.sep+"{}".format(images[iCounter]))
+            os.unlink(__configData["imageFolderPath"]+os.sep+"{}".format(images[iCounter]))
+            iCounter = iCounter+1
+        return iImages
+    
+    def extractXMLData(self, preProcessDataXMLGPS, images, frameRate, __configData):
+        gpsData = []
+        i = 0
+        iCounter = 0
+        iImages = []
         for data in preProcessDataXMLGPS:
             print("****")
             _gpsData = {}
@@ -517,21 +569,22 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                     lat = vData["GPSLatitude"]
                     lng = vData["GPSLongitude"]
                 else:
-                    logging.error("File deleted as no gps data available. "+imageFolderPath+os.sep+"{}".format(images[iCounter]))
-                    print("File deleted as no gps data available. "+imageFolderPath+os.sep+"{}".format(images[iCounter]))
-                    os.unlink(imageFolderPath+os.sep+"{}".format(images[iCounter]))
+                    logging.error("File deleted as no gps data available. "+__configData["imageFolderPath"]+os.sep+"{}".format(images[iCounter]))
+                    print("File deleted as no gps data available. "+__configData["imageFolderPath"]+os.sep+"{}".format(images[iCounter]))
+                    os.unlink(__configData["imageFolderPath"]+os.sep+"{}".format(images[iCounter]))
                     lat = "N/A"
                     lng = "N/A"
 
                 print(len(data["GPSData"]), datetime.datetime.strftime(k, "%Y:%m:%d %H:%M:%S.%f"), "\""+lat+"\",", "\""+lng+"\"", "image:"+str(iCounter+1))
                 iCounter = iCounter+1
             i = i+1
-        metaData = {
-            "gps": gpsData,
-            "json": preProcessDataJSON
-        }
-        self.__injectMetadata(metaData, iImages, imageFolderPath)
-        
+        while iCounter < len(images):
+            logging.error("File deleted as no gps data available. "+__configData["imageFolderPath"]+os.sep+"{}".format(images[iCounter]))
+            print("File deleted as no gps data available. "+__configData["imageFolderPath"]+os.sep+"{}".format(images[iCounter]))
+            os.unlink(__configData["imageFolderPath"]+os.sep+"{}".format(images[iCounter]))
+            iCounter = iCounter+1
+        return iImages
+
     def getGpsData(self, gpsData, startTime, endTime, frameRate, configData):
         t_start = datetime.datetime.strptime(startTime, "%Y:%m:%d %H:%M:%S.%f")
         if endTime is not None:
@@ -548,7 +601,6 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         gpsDataLatest = {}
         for k, v in data["timePoints"].items():
             betweenTimes.append(k)
-            #print(k, v["GPSLatitude"], v["GPSLongitude"], v["GPSAltitude"])
         lst = None
         for t in data["timeDifference"]:
             z = min(betweenTimes, key=lambda x: abs(x - t))
@@ -557,13 +609,6 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             else:
                 gpsDataLatest[t] = data["timePoints"][z]
                 lst = z
-            #print(datetime.datetime.strftime(t, "%Y:%m:%d %H:%M:%S.%f"), "--", datetime.datetime.strftime(z, "%Y:%m:%d %H:%M:%S.%f"))
-        """for k, v in gpsDataLatest.items():
-            if v is not None:
-                print(k, v["GPSLatitude"], v["GPSLongitude"], v["GPSAltitude"])
-            else:
-                print(k, v)
-        exit()"""
         return gpsDataLatest
 
     def getGpsDataTimeDifference(self, startTime, frameRate, frlen):
@@ -586,11 +631,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         data[t] = gpsData[i]
         if endTime is not None:
             t_end = endTime
-            if "timeWarp" in configData:
-                tw = configData["timeWarp"]
-                diff = datetime.timedelta(0, tw/float(frameRate)) 
-            else:
-                diff = (t_end - t_start)/float(frlen)
+            diff = (t_end - t_start)/float(frlen)
             while t < t_end:
                 if i > frlen-1:
                     break
@@ -700,7 +741,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("input", type=str, help="Input a valid video file.")
-    parser.add_argument("-f", "--frame-rate", type=int, help="Sets the frame rate (frames per second) for extraction, default: 5.", default=5)
+    parser.add_argument("-r", "--frame-rate", type=int, help="Sets the frame rate (frames per second) for extraction, default: 5.", default=5)
     parser.add_argument("-t", "--time-warp", type=str, help="Set time warp mode for gopro. available values are 2x, 5x, 10x, 15x, 30x")
     parser.add_argument("-q", "--quality", type=int, help="Sets the extracted quality between 2-6. 1 being the highest quality (but slower processing), default: 1. This is value used for ffmpeg -q:v flag. ", default=1)
     parser.add_argument("-d", "--debug", action='store_true', help="Enable debug mode, default: off.")
