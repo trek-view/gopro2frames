@@ -466,6 +466,9 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         __configData["jsonData"] = preProcessDataJSON
         __configData["imageFolder"] = imageFolder
         __configData["imageFolderPath"] = imageFolderPath
+        if args.time_warp is not None:
+            __configData["timeWarp"] = int(args.time_warp.replace("x", ""))
+        
         self.setConfig(__configData)
 
         framesBroken = self._breakIntoFrames(filename, frameRate, imageFolderPath, imageFolder)
@@ -496,9 +499,9 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             bt1 = preProcessDataXMLGPS[i]["GPSDateTime"]
             if i < len(preProcessDataXMLGPS)-1:
                 bt2 = preProcessDataXMLGPS[i+1]["GPSDateTime"]
-                _gpsData = self.getGpsData(data["GPSData"], bt1, bt2, frameRate)
+                _gpsData = self.getGpsData(data["GPSData"], bt1, bt2, frameRate, copy.deepcopy(__configData))
             else:
-                _gpsData = self.getGpsData(data["GPSData"], data["GPSDateTime"], None, frameRate)
+                _gpsData = self.getGpsData(data["GPSData"], data["GPSDateTime"], None, frameRate, copy.deepcopy(__configData))
 
             for k, vData in _gpsData.items():
                 if iCounter >= len(images):
@@ -529,14 +532,14 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         }
         self.__injectMetadata(metaData, iImages, imageFolderPath)
         
-    def getGpsData(self, gpsData, startTime, endTime, frameRate):
+    def getGpsData(self, gpsData, startTime, endTime, frameRate, configData):
         t_start = datetime.datetime.strptime(startTime, "%Y:%m:%d %H:%M:%S.%f")
         if endTime is not None:
             t_end = datetime.datetime.strptime(endTime, "%Y:%m:%d %H:%M:%S.%f")
         else:
             t_end = None
         timeDifference = self.getGpsDataTimeDifference(t_start, frameRate, len(gpsData))
-        timePoints = self.getGpsDataTimePoints(gpsData, t_start, t_end)
+        timePoints = self.getGpsDataTimePoints(gpsData, t_start, t_end, frameRate, configData)
         data = {
             "timeDifference": timeDifference,
             "timePoints": timePoints
@@ -574,7 +577,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             times.append(t)
         return times
 
-    def getGpsDataTimePoints(self, gpsData, startTime, endTime):
+    def getGpsDataTimePoints(self, gpsData, startTime, endTime, frameRate, configData):
         frlen = len(gpsData)
         data = {}
         t_start = startTime
@@ -583,7 +586,11 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         data[t] = gpsData[i]
         if endTime is not None:
             t_end = endTime
-            diff = (t_end - t_start)/float(frlen)
+            if "timeWarp" in configData:
+                tw = configData["timeWarp"]
+                diff = datetime.timedelta(0, tw/float(frameRate)) 
+            else:
+                diff = (t_end - t_start)/float(frlen)
             while t < t_end:
                 if i > frlen-1:
                     break
@@ -672,6 +679,12 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             if frameRate not in fropts:
                 exit("Frame rate {} is not available. Only 1, 2, 5 options are available.".format(frameRate))
 
+        if (args.time_warp is not None):
+            timeWarp = str(args.time_warp)
+            twopts = ["2x", "5x", "10x", "15x", "30x"]
+            if timeWarp not in twopts:
+                exit("Timewarp mode {} not available. Only 2x, 5x, 10x, 15x, 30x options are available.".format(timeWarp))
+
         if (args.quality is not None):
             quality = int(args.quality)
             qopts = [1,2,3,4,5]
@@ -688,6 +701,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("input", type=str, help="Input a valid video file.")
     parser.add_argument("-f", "--frame-rate", type=int, help="Sets the frame rate (frames per second) for extraction, default: 5.", default=5)
+    parser.add_argument("-t", "--time-warp", type=str, help="Set time warp mode for gopro. available values are 2x, 5x, 10x, 15x, 30x")
     parser.add_argument("-q", "--quality", type=int, help="Sets the extracted quality between 2-6. 1 being the highest quality (but slower processing), default: 1. This is value used for ffmpeg -q:v flag. ", default=1)
     parser.add_argument("-d", "--debug", action='store_true', help="Enable debug mode, default: off.")
     args = parser.parse_args()
