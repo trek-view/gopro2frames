@@ -24,6 +24,10 @@ class TrekviewCommand():
         deg, minutes, seconds, direction = re.split('[deg\'"]+', latLng)
         return (float(deg.strip()) + float(minutes.strip())/60 + float(seconds.strip())/(60*60)) * (-1 if direction.strip() in ['W', 'S'] else 1)
 
+    def latLngToDirection(self, latLng):
+        deg, minutes, seconds, direction = re.split('[deg\'"]+', latLng)
+        return direction.strip()
+
     def __subprocess(self, command, sh=0):
         logging.info('Executing subprocess')
         ret = False
@@ -682,24 +686,31 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         for img in images:
             logging.info("# image: {}, GPSDateTime: {}, GPSLatitude: {}, GPSLongitude: {}, GPSAltitude: {}".format(img["image"], img["GPSDateTime"], img["GPSLatitude"], img["GPSLongitude"], img["GPSAltitude"]))
             tt = img["GPSDateTime"].split(".")
+            ttz = tt[0].split(" ")
             t = datetime.datetime.strptime(img["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
             a = self.latLngToDecimal(img["GPSLatitude"])
             b = self.latLngToDecimal(img["GPSLongitude"])
             alt = img["GPSAltitude"].split(" ")[0]
+            latRef = self.latLngToDirection(img["GPSLatitude"])
+            lngRef = self.latLngToDirection(img["GPSLongitude"])
+            altRef = 0 if float(alt) > 0.0 else -1
             gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=a, longitude=b, time=t, elevation=alt))
             cmdMetaData = [
                 '-DateTimeOriginal="{0}Z"'.format(self.removeEntities(tt[0])),
                 '-SubSecTimeOriginal="{0}"'.format(self.removeEntities(tt[1])),
                 '-SubSecDateTimeOriginal="{0}Z"'.format(self.removeEntities(".".join(tt))),
                 '-IFD0:Model="{}"'.format(self.removeEntities(jsonMetaData["DeviceName"])),
+                '-GPSLatitude="{0}"'.format(img["GPSLatitude"]),
+                '-GPSLatitudeRef="{0}"'.format(latRef),
+                '-GPSLongitude="{0}"'.format(img["GPSLongitude"]),
+                '-GPSLongitudeRef="{0}"'.format(lngRef),
+                '-GPSAltitude="{0}"'.format(img["GPSAltitude"]),
+                '-GPSAltitudeRef={0}'.format(altRef),
+                '-GPSDateStamp="{0}Z"'.format(self.removeEntities(tt[0])),
+                '-GPSTimeStamp="{0}Z"'.format(self.removeEntities(ttz[1])),
             ]
             """
-                '-GPSLatitude="{0}"'.format(img["GPSLatitude"]),
-                '-GPSLatitudeRef="{0}"'.format("North"),
-                '-GPSLongitude="{0}"'.format(img["GPSLongitude"]),
-                '-GPSLongitudeRef="{0}"'.format("West"),
-                '-GPSAltitude="{0}"'.format(img["GPSAltitude"]),
-                '-GPSAltitudeRef="{0}"'.format(1),
+
             """
             if __config["jsonData"]["ProjectionType"] == "equirectangular":
                 cmdMetaData.append('-XMP-GPano:StitchingSoftware="{}"'.format(self.removeEntities(jsonMetaData["StitchingSoftware"])))
@@ -720,7 +731,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             else:
                 logging.info(output)
 
-        gpxData = gpx.to_xml() 
+        """gpxData = gpx.to_xml() 
         gpxFileName = os.getcwd() + os.sep + 'VIDEO_META.gpx'
         with open(gpxFileName, 'w') as f:
             f.write(gpxData)
@@ -731,7 +742,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                 logging.error(output)
             else:
                 logging.info(output)
-            os.unlink(gpxFileName)
+            os.unlink(gpxFileName)"""
 
 
     def __validate(self, args):
