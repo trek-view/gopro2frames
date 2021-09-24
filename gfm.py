@@ -382,7 +382,7 @@ class TrekviewProcessMp4(TrekviewCommand):
         Track = __config["jsonData"]["Track"]
         xmlData = output.stdout.decode('utf-8',"ignore")
         gpsData = []
-        xmlFileName = os.getcwd() + os.sep + 'VIDEO_META.xml'
+        xmlFileName = __config["imageFolderPath"] + os.sep + __config["imageFolder"] + '.xml'
         with open(xmlFileName, "w") as f:
             f.write(xmlData)
             f.close()
@@ -896,7 +896,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=a, longitude=b, time=t, elevation=alt))
 
         gpxData = gpx.to_xml() 
-        gpxFileName = os.getcwd() + os.sep + 'VIDEO_META.gpx'
+        gpxFileName = imageFolder + os.sep + __config["imageFolder"] +'.gpx'
         with open(gpxFileName, 'w') as f:
             f.write(gpxData)
             f.close()
