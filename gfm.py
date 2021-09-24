@@ -495,10 +495,21 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             exit("Unable to get metadata from video.")
         images.sort()
         print("Total images: {}".format(imagesCount))
+        times = self.getLinearTimes(preProcessDataXMLGPS, frameRate, images)
         if args.time_warp is not None:
             iImages = self.extractTimewrapXMLData(preProcessDataXMLGPS, images, frameRate, copy.deepcopy(__configData))
         else:
-            iImages = self.extractXMLData(preProcessDataXMLGPS, images, frameRate, copy.deepcopy(__configData))
+            iImages = []
+            gpsPoints = self.extractXMLDataNew(preProcessDataXMLGPS, images, frameRate, copy.deepcopy(__configData))
+            gpsData = self.mapGPSPointsToTimes(times, gpsPoints)
+            for data in gpsData:
+                iImages.append({
+                    "image": data["image"],
+                    "GPSDateTime": datetime.datetime.strftime(data["time"], "%Y:%m:%d %H:%M:%S.%f"),
+                    "GPSLatitude": data["GPSData"]["GPSLatitude"],
+                    "GPSLongitude": data["GPSData"]["GPSLongitude"],
+                    "GPSAltitude": data["GPSData"]["GPSAltitude"],
+                })
         
         metaData = {
             "gps": iImages,
@@ -554,11 +565,25 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             iCounter = iCounter+1
         return iImages
     
+    def getLinearTimes(self, preProcessDataXMLGPS, frameRate, images):
+        times = []
+        if len(preProcessDataXMLGPS) > 0:
+            diff = (100.0/float(frameRate))/100.0
+            t = datetime.datetime.strptime(preProcessDataXMLGPS[0]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+            times.append({"time":t, "image":images[0]})
+            for i in range(1, len(images)):
+                t = t+datetime.timedelta(0, diff)
+                times.append({"time":t, "image":images[i]})
+        return times
+
     def extractXMLData(self, preProcessDataXMLGPS, images, frameRate, __configData):
         gpsData = []
         i = 0
         iCounter = 0
         iImages = []
+        times = self.getLinearTimes(preProcessDataXMLGPS, frameRate, len(images))
+        print(len(times), times)
+        exit()
         for data in preProcessDataXMLGPS:
             print("****")
             _gpsData = {}
@@ -598,7 +623,35 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             iCounter = iCounter+1
         return iImages
 
-    def getGpsData(self, gpsData, startTime, endTime, frameRate, configData):
+    def extractXMLDataNew(self, preProcessDataXMLGPS, images, frameRate, __configData):
+        i = 0
+        gpsPoints = {}
+        for data in preProcessDataXMLGPS:
+            _gpsData = {}
+            bt1 = preProcessDataXMLGPS[i]["GPSDateTime"]
+            if i < len(preProcessDataXMLGPS)-1:
+                bt2 = preProcessDataXMLGPS[i+1]["GPSDateTime"]
+                _gpsData = self.getGpsData(data["GPSData"], bt1, bt2, frameRate, copy.deepcopy(__configData))
+            else:
+                _gpsData = self.getGpsData(data["GPSData"], bt1, None, frameRate, copy.deepcopy(__configData))
+            for k, v in _gpsData.items():
+                gpsPoints[k] = v
+            i = i+1
+        return gpsPoints
+
+    def mapGPSPointsToTimes(self, times, gpsPoints):
+        betweenTimes = []
+        gpsData = []
+        for k, v in gpsPoints.items():
+            betweenTimes.append(k)
+        for tdict in times:
+            t = tdict["time"]
+            z = min(betweenTimes, key=lambda x: abs(x - t))
+            gpsData.append({"time":t, "image": tdict["image"], "GPSData": gpsPoints[z]})
+            print("{} {} {} {} {}".format(datetime.datetime.strftime(t, "%Y:%m:%d %H:%M:%S.%f"), datetime.datetime.strftime(z, "%Y:%m:%d %H:%M:%S.%f"), gpsPoints[z]["GPSLatitude"], gpsPoints[z]["GPSLongitude"], gpsPoints[z]["GPSAltitude"]))
+        return gpsData
+
+    def getGpsDataOld(self, gpsData, startTime, endTime, frameRate, configData):
         t_start = datetime.datetime.strptime(startTime, "%Y:%m:%d %H:%M:%S.%f")
         if endTime is not None:
             t_end = datetime.datetime.strptime(endTime, "%Y:%m:%d %H:%M:%S.%f")
@@ -625,6 +678,34 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             print("{} {} {} {} {}".format(datetime.datetime.strftime(t, "%Y:%m:%d %H:%M:%S.%f"), datetime.datetime.strftime(z, "%Y:%m:%d %H:%M:%S.%f"), data["timePoints"][z]["GPSLatitude"], data["timePoints"][z]["GPSLongitude"], data["timePoints"][z]["GPSAltitude"]))
         return gpsDataLatest
 
+    def getGpsData(self, gpsData, startTime, endTime, frameRate, configData):
+        t_start = datetime.datetime.strptime(startTime, "%Y:%m:%d %H:%M:%S.%f")
+        if endTime is not None:
+            t_end = datetime.datetime.strptime(endTime, "%Y:%m:%d %H:%M:%S.%f")
+        else:
+            t_end = None
+        timeDifference = self.getGpsDataTimeDifference(t_start, t_end, frameRate, len(gpsData))
+        if t_end is None:
+            if len(timeDifference) > 0:
+                t_end = timeDifference[-1]
+            else:
+                t_end = None
+        timePoints = self.getGpsDataTimePoints(gpsData, t_start, t_end, frameRate, configData)
+        data = {
+            "timeDifference": timeDifference,
+            "timePoints": timePoints
+        }
+        betweenTimes = []
+        gpsDataLatest = {}
+        for k, v in data["timePoints"].items():
+            betweenTimes.append(k)
+        for t in data["timeDifference"]:
+            z = min(betweenTimes, key=lambda x: abs(x - t))
+            gpsDataLatest[t] = data["timePoints"][z]
+            #print("{} {} {} {} {}".format(datetime.datetime.strftime(t, "%Y:%m:%d %H:%M:%S.%f"), datetime.datetime.strftime(z, "%Y:%m:%d %H:%M:%S.%f"), data["timePoints"][z]["GPSLatitude"], data["timePoints"][z]["GPSLongitude"], data["timePoints"][z]["GPSAltitude"]))
+        return timePoints
+
+
     def getGpsDataTimeDifference(self, startTime, endTime, frameRate, frlen):
         t_start = startTime
         if endTime is not None:
@@ -640,6 +721,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         return times
 
     def getGpsDataTimePoints(self, gpsData, startTime, endTime, frameRate, configData):
+        print("{} -- {}".format(startTime, endTime))
         frlen = len(gpsData)
         data = {}
         t_start = startTime
@@ -656,8 +738,8 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             t = t+diff
             data[t] = gpsData[i]
             i = i+1
-        """for k, v in data.items():
-            print("{} {} {}".format(k, v["GPSLatitude"], v["GPSLongitude"]))"""
+        for k, v in data.items():
+            print("{} {} {}".format(k, v["GPSLatitude"], v["GPSLongitude"]))
         print("Count: {}".format(len(data)))
         return data
 
