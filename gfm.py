@@ -681,7 +681,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         for img in images:
             logging.info("# image: {}, GPSDateTime: {}, GPSLatitude: {}, GPSLongitude: {}, GPSAltitude: {}".format(img["image"], img["GPSDateTime"], img["GPSLatitude"], img["GPSLongitude"], img["GPSAltitude"]))
             tt = img["GPSDateTime"].split(".")
-            ttz = tt[0].split(" ")
+            ttz = img["GPSDateTime"].split(" ")
             t = datetime.datetime.strptime(img["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
             a = self.latLngToDecimal(img["GPSLatitude"])
             b = self.latLngToDecimal(img["GPSLongitude"])
