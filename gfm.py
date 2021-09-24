@@ -22,7 +22,7 @@ class TrekviewCommand():
 
     def latLngToDecimal(self, latLng):
         deg, minutes, seconds, direction = re.split('[deg\'"]+', latLng)
-        return (float(deg) + float(minutes)/60 + float(seconds)/(60*60)) * (-1 if direction in ['W', 'S'] else 1)
+        return (float(deg.strip()) + float(minutes.strip())/60 + float(seconds.strip())/(60*60)) * (-1 if direction.strip() in ['W', 'S'] else 1)
 
     def __subprocess(self, command, sh=0):
         logging.info('Executing subprocess')
@@ -394,7 +394,7 @@ class TrekviewProcessMp4(TrekviewCommand):
                         "GPSDateTime": data["GPSDateTime"],
                         "GPSData": datag
                     })
-            os.unlink(xmlFileName)
+            #os.unlink(xmlFileName)
             return gpsData
         return []
 
@@ -403,7 +403,14 @@ class TrekviewProcessMp4(TrekviewCommand):
             shutil.rmtree(folderPath)
         os.makedirs(folderPath, exist_ok=True) 
         __config = self.getConfig()
-        cmd = ["-i", filename, "-r", str(frameRate), folderPath+os.sep+"{}_%06d.jpg".format(imageFolder)]
+        test_str = ""
+        if __config["debug"] is True:
+            if "timeWarp" in __config:
+                tw = "-t_{}x".format(__config["timeWarp"])
+            else:
+                tw = ""
+            test_str = "-q_{}-r_{}fps{}".format(__config["quality"], __config["frameRate"], tw)
+        cmd = ["-i", filename, "-r", str(frameRate), folderPath+os.sep+"{}{}_%06d.jpg".format(imageFolder, test_str)]
         output = self._ffmpeg(cmd, 1)
         if output.returncode != 0:
             return False 
@@ -483,6 +490,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             logging.critical("Unable to get metadata from video.")
             exit("Unable to get metadata from video.")
         images.sort()
+        print("Total images: {}".format(imagesCount))
         if args.time_warp is not None:
             iImages = self.extractTimewrapXMLData(preProcessDataXMLGPS, images, frameRate, copy.deepcopy(__configData))
         else:
@@ -532,6 +540,8 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             lst = t
             t = tdiff
             iCounter = iCounter+1
+            print("{} {} {} {} {}".format(datetime.datetime.strftime(initialTime, "%Y:%m:%d %H:%M:%S.%f"), datetime.datetime.strftime(z, "%Y:%m:%d %H:%M:%S.%f"), _gpsDataInitial[z]["GPSLatitude"], _gpsDataInitial[z]["GPSLongitude"], _gpsDataInitial[z]["GPSAltitude"]))
+
 
         while iCounter < len(images):
             logging.error("File deleted as no gps data available. "+__configData["imageFolderPath"]+os.sep+"{}".format(images[iCounter]))
@@ -554,7 +564,6 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                 _gpsData = self.getGpsData(data["GPSData"], bt1, bt2, frameRate, copy.deepcopy(__configData))
             else:
                 _gpsData = self.getGpsData(data["GPSData"], data["GPSDateTime"], None, frameRate, copy.deepcopy(__configData))
-
             for k, vData in _gpsData.items():
                 if iCounter >= len(images):
                     break
@@ -574,10 +583,10 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                     os.unlink(__configData["imageFolderPath"]+os.sep+"{}".format(images[iCounter]))
                     lat = "N/A"
                     lng = "N/A"
-
-                print(len(data["GPSData"]), datetime.datetime.strftime(k, "%Y:%m:%d %H:%M:%S.%f"), "\""+lat+"\",", "\""+lng+"\"", "image:"+str(iCounter+1))
+                #print(len(data["GPSData"]), datetime.datetime.strftime(k, "%Y:%m:%d %H:%M:%S.%f"), "\""+lat+"\",", "\""+lng+"\"", "image:"+str(iCounter+1))
                 iCounter = iCounter+1
             i = i+1
+
         while iCounter < len(images):
             logging.error("File deleted as no gps data available. "+__configData["imageFolderPath"]+os.sep+"{}".format(images[iCounter]))
             print("File deleted as no gps data available. "+__configData["imageFolderPath"]+os.sep+"{}".format(images[iCounter]))
@@ -591,7 +600,12 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             t_end = datetime.datetime.strptime(endTime, "%Y:%m:%d %H:%M:%S.%f")
         else:
             t_end = None
-        timeDifference = self.getGpsDataTimeDifference(t_start, frameRate, len(gpsData))
+        timeDifference = self.getGpsDataTimeDifference(t_start, t_end, frameRate, len(gpsData))
+        if t_end is None:
+            if len(timeDifference) > 0:
+                t_end = timeDifference[-1]
+            else:
+                t_end = None
         timePoints = self.getGpsDataTimePoints(gpsData, t_start, t_end, frameRate, configData)
         data = {
             "timeDifference": timeDifference,
@@ -609,11 +623,15 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             else:
                 gpsDataLatest[t] = data["timePoints"][z]
                 lst = z
+            print("{} {} {} {} {}".format(datetime.datetime.strftime(t, "%Y:%m:%d %H:%M:%S.%f"), datetime.datetime.strftime(z, "%Y:%m:%d %H:%M:%S.%f"), data["timePoints"][z]["GPSLatitude"], data["timePoints"][z]["GPSLongitude"], data["timePoints"][z]["GPSAltitude"]))
         return gpsDataLatest
 
-    def getGpsDataTimeDifference(self, startTime, frameRate, frlen):
+    def getGpsDataTimeDifference(self, startTime, endTime, frameRate, frlen):
         t_start = startTime
-        diff = (100.0/float(frameRate))/100.0
+        if endTime is not None:
+            diff = (100.0/float(frameRate))/100.0
+        else:
+            diff = 0.05
         times = []
         t = t_start
         times.append(t)
@@ -629,21 +647,19 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         t = t_start
         i = 0 
         data[t] = gpsData[i]
-        if endTime is not None:
-            t_end = endTime
-            diff = (t_end - t_start)/float(frlen)
-            while t < t_end:
-                if i > frlen-1:
-                    break
-                t = t+diff
-                data[t] = gpsData[i]
-                i = i+1
-        else:
-            diff = datetime.timedelta(0, 0.05) 
-            while i < frlen-1:
-                t = t+diff
-                data[t] = gpsData[i]
-                i = i+1
+        if endTime is None:
+            return data
+        t_end = endTime
+        diff = (t_end - t_start)/float(frlen)
+        while t < t_end:
+            if i > frlen-1:
+                break
+            t = t+diff
+            data[t] = gpsData[i]
+            i = i+1
+        """for k, v in data.items():
+            print("{} {} {}".format(k, v["GPSLatitude"], v["GPSLongitude"]))"""
+        print("Count: {}".format(len(data)))
         return data
 
     def __injectMetadata(self, metaData, images, imageFolder):
@@ -677,6 +693,14 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                 '-SubSecDateTimeOriginal="{0}Z"'.format(self.removeEntities(".".join(tt))),
                 '-IFD0:Model="{}"'.format(self.removeEntities(jsonMetaData["DeviceName"])),
             ]
+            """
+                '-GPSLatitude="{0}"'.format(img["GPSLatitude"]),
+                '-GPSLatitudeRef="{0}"'.format("North"),
+                '-GPSLongitude="{0}"'.format(img["GPSLongitude"]),
+                '-GPSLongitudeRef="{0}"'.format("West"),
+                '-GPSAltitude="{0}"'.format(img["GPSAltitude"]),
+                '-GPSAltitudeRef="{0}"'.format(1),
+            """
             if __config["jsonData"]["ProjectionType"] == "equirectangular":
                 cmdMetaData.append('-XMP-GPano:StitchingSoftware="{}"'.format(self.removeEntities(jsonMetaData["StitchingSoftware"])))
                 cmdMetaData.append('-XMP-GPano:SourcePhotosCount="{}"'.format(2))
@@ -690,7 +714,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                 cmdMetaData.append('-XMP-GPano:CroppedAreaTopPixels="{}"'.format(0))
             cmdMetaData.append('-overwrite_original')
             cmdMetaData.append(imageFolder+os.sep+"{}".format(img["image"]))
-            output = self._exiftool(cmdMetaData)
+            output = self._exiftool(cmdMetaData, 1)
             if output.returncode != 0:
                 logging.error(output)
             else:
