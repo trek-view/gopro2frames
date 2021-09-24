@@ -341,6 +341,11 @@ class TrekviewPreProcess(TrekviewCommand):
 
 class TrekviewProcessMp4(TrekviewCommand):
 
+    """
+        __getGPSw function
+        This helper function is used to get gps data of a particular block.
+    """ 
+
     def __getGPSw(self, el, nsmap):
         __config = self.getConfig()
         Track = __config["jsonData"]["Track"]
@@ -362,6 +367,11 @@ class TrekviewProcessMp4(TrekviewCommand):
             if el.tag == "{"+nsmap[Track]+"}GPSAltitude":
                 data["GPSData"].append({"GPSAltitude": el.text})
         return data
+
+    """
+        _processXMLGPS function
+        This function is used to process xml and extract all the metadata related to gps.
+    """ 
 
     def _processXMLGPS(self, filename):
         output = self._exiftool(["-ee", "-G3", "-api", "LargeFileSupport=1", "-X", filename])
@@ -402,6 +412,11 @@ class TrekviewProcessMp4(TrekviewCommand):
             return gpsData
         return []
 
+    """
+        _breakIntoFrames function
+        This function is used to extract all the images using ffmpeg.
+    """ 
+
     def _breakIntoFrames(self, filename, frameRate, folderPath, imageFolder):
         if os.path.exists(folderPath):
             shutil.rmtree(folderPath)
@@ -421,6 +436,11 @@ class TrekviewProcessMp4(TrekviewCommand):
         else:
             return True
 
+    """
+        _getTimesBetween function
+        This function is used to get times between a start time and end time.
+    """ 
+
     def _getTimesBetween(self, start, end, frameRate, frlen):
         print(start, end)
         t_start = datetime.datetime.strptime(start, "%Y:%m:%d %H:%M:%S.%f")
@@ -437,7 +457,12 @@ class TrekviewProcessMp4(TrekviewCommand):
         return times
 
 class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
+    """
+        __init__ function
+        Main entry point where if validation passes images are extracted using ffmpeg and then metadata is injected using exiftool. 
+    """  
     def __init__(self, args, dateTimeCurrent):
+        self.__allGPSPoints = []
 
         __configData = {
             "frameRate": args.frame_rate,
@@ -500,7 +525,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             iImages = self.extractTimewrapXMLData(preProcessDataXMLGPS, images, frameRate, copy.deepcopy(__configData))
         else:
             iImages = []
-            gpsPoints = self.extractXMLDataNew(preProcessDataXMLGPS, images, frameRate, copy.deepcopy(__configData))
+            gpsPoints = self.extractXMLDataNormal(preProcessDataXMLGPS, images, frameRate, copy.deepcopy(__configData))
             gpsData = self.mapGPSPointsToTimes(times, gpsPoints)
             for data in gpsData:
                 iImages.append({
@@ -516,6 +541,11 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             "json": preProcessDataJSON
         }
         self.__injectMetadata(metaData, iImages, imageFolderPath)
+
+    """
+        extractTimewrapXMLData function
+        This function is used to get GPS Data from video xml for timewarp video
+    """ 
 
     def extractTimewrapXMLData(self, preProcessDataXMLGPS, images, frameRate, __configData):
         i = 0
@@ -565,6 +595,11 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             iCounter = iCounter+1
         return iImages
     
+    """
+        getLinearTimes function
+        This function is used to get linear timestamp at a constant step level
+    """ 
+
     def getLinearTimes(self, preProcessDataXMLGPS, frameRate, images):
         times = []
         if len(preProcessDataXMLGPS) > 0:
@@ -575,6 +610,11 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                 t = t+datetime.timedelta(0, diff)
                 times.append({"time":t, "image":images[i]})
         return times
+
+    """
+        extractXMLData function
+       This function is used to get GPS Data from video xml
+    """ 
 
     def extractXMLData(self, preProcessDataXMLGPS, images, frameRate, __configData):
         gpsData = []
@@ -623,7 +663,12 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             iCounter = iCounter+1
         return iImages
 
-    def extractXMLDataNew(self, preProcessDataXMLGPS, images, frameRate, __configData):
+    """
+        extractXMLDataNormal function
+       This function is used to get GPS Data from video xml for non timewarp video
+    """ 
+
+    def extractXMLDataNormal(self, preProcessDataXMLGPS, images, frameRate, __configData):
         i = 0
         gpsPoints = {}
         for data in preProcessDataXMLGPS:
@@ -639,6 +684,11 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             i = i+1
         return gpsPoints
 
+    """
+        mapGPSPointsToTimes function
+       This function is used to get map photo time to the closest gps time available
+    """ 
+
     def mapGPSPointsToTimes(self, times, gpsPoints):
         betweenTimes = []
         gpsData = []
@@ -650,6 +700,12 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             gpsData.append({"time":t, "image": tdict["image"], "GPSData": gpsPoints[z]})
             print("{} {} {} {} {}".format(datetime.datetime.strftime(t, "%Y:%m:%d %H:%M:%S.%f"), datetime.datetime.strftime(z, "%Y:%m:%d %H:%M:%S.%f"), gpsPoints[z]["GPSLatitude"], gpsPoints[z]["GPSLongitude"], gpsPoints[z]["GPSAltitude"]))
         return gpsData
+
+    """
+       getGpsDataOld function
+       This function is used to get map photo time to the closest gps time available
+       This function needs to be removed in future
+    """ 
 
     def getGpsDataOld(self, gpsData, startTime, endTime, frameRate, configData):
         t_start = datetime.datetime.strptime(startTime, "%Y:%m:%d %H:%M:%S.%f")
@@ -678,6 +734,11 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             print("{} {} {} {} {}".format(datetime.datetime.strftime(t, "%Y:%m:%d %H:%M:%S.%f"), datetime.datetime.strftime(z, "%Y:%m:%d %H:%M:%S.%f"), data["timePoints"][z]["GPSLatitude"], data["timePoints"][z]["GPSLongitude"], data["timePoints"][z]["GPSAltitude"]))
         return gpsDataLatest
 
+    """
+       getGpsData function
+       This function is used to get all gps time in xml
+    """ 
+
     def getGpsData(self, gpsData, startTime, endTime, frameRate, configData):
         t_start = datetime.datetime.strptime(startTime, "%Y:%m:%d %H:%M:%S.%f")
         if endTime is not None:
@@ -691,20 +752,12 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             else:
                 t_end = None
         timePoints = self.getGpsDataTimePoints(gpsData, t_start, t_end, frameRate, configData)
-        data = {
-            "timeDifference": timeDifference,
-            "timePoints": timePoints
-        }
-        betweenTimes = []
-        gpsDataLatest = {}
-        for k, v in data["timePoints"].items():
-            betweenTimes.append(k)
-        for t in data["timeDifference"]:
-            z = min(betweenTimes, key=lambda x: abs(x - t))
-            gpsDataLatest[t] = data["timePoints"][z]
-            #print("{} {} {} {} {}".format(datetime.datetime.strftime(t, "%Y:%m:%d %H:%M:%S.%f"), datetime.datetime.strftime(z, "%Y:%m:%d %H:%M:%S.%f"), data["timePoints"][z]["GPSLatitude"], data["timePoints"][z]["GPSLongitude"], data["timePoints"][z]["GPSAltitude"]))
         return timePoints
 
+    """
+       getGpsDataTimeDifference function
+       This function is used to get all times seperated at a constant step space.
+    """ 
 
     def getGpsDataTimeDifference(self, startTime, endTime, frameRate, frlen):
         t_start = startTime
@@ -719,6 +772,12 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             t = t+datetime.timedelta(0, diff)
             times.append(t)
         return times
+
+
+    """
+       getGpsDataTimePoints function
+       This function is used to get all the gps points with a calculated timestamp in between a start time and end time
+    """
 
     def getGpsDataTimePoints(self, gpsData, startTime, endTime, frameRate, configData):
         print("{} -- {}".format(startTime, endTime))
@@ -741,23 +800,24 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             i = i+1
         for k, v in data.items():
             print("#{} {} {}".format(k, v["GPSLatitude"], v["GPSLongitude"]))
+            self.__allGPSPoints.append({
+                "GPSDateTime": k,
+                "GPSLatitude": v["GPSLatitude"],
+                "GPSLongitude": v["GPSLongitude"],
+                "GPSAltitude": v["GPSAltitude"] 
+            })
         print("Count: {} {}".format(len(data), len(gpsData)))
         return data
+
+    """
+       __injectMetadata function
+       This function is used to inject collected metadata inside of all the images available.
+    """
 
     def __injectMetadata(self, metaData, images, imageFolder):
 
         gpsMetaData = metaData["gps"]
         jsonMetaData = metaData["json"]
-
-        gpx = gpxpy.gpx.GPX()
-
-        # Create first track in our GPX:
-        gpx_track = gpxpy.gpx.GPXTrack()
-        gpx.tracks.append(gpx_track)
-
-        # Create first segment in our GPX track:
-        gpx_segment = gpxpy.gpx.GPXTrackSegment()
-        gpx_track.segments.append(gpx_segment)
 
         __config = self.getConfig()
 
@@ -765,23 +825,16 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             logging.info("# image: {}, GPSDateTime: {}, GPSLatitude: {}, GPSLongitude: {}, GPSAltitude: {}".format(img["image"], img["GPSDateTime"], img["GPSLatitude"], img["GPSLongitude"], img["GPSAltitude"]))
             tt = img["GPSDateTime"].split(".")
             ttz = img["GPSDateTime"].split(" ")
-            t = datetime.datetime.strptime(img["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
-            a = self.latLngToDecimal(img["GPSLatitude"])
-            b = self.latLngToDecimal(img["GPSLongitude"])
             alt = img["GPSAltitude"].split(" ")[0]
             latRef = self.latLngToDirection(img["GPSLatitude"])
             lngRef = self.latLngToDirection(img["GPSLongitude"])
             altRef = 0 if float(alt) > 0.0 else -1
-            gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=a, longitude=b, time=t, elevation=alt))
             cmdMetaData = [
                 '-DateTimeOriginal="{0}Z"'.format(self.removeEntities(tt[0])),
                 '-SubSecTimeOriginal="{0}"'.format(self.removeEntities(tt[1])),
                 '-SubSecDateTimeOriginal="{0}Z"'.format(self.removeEntities(".".join(tt))),
                 '-IFD0:Model="{}"'.format(self.removeEntities(jsonMetaData["DeviceName"])),
             ]
-            """
-
-            """
             if __config["jsonData"]["ProjectionType"] == "equirectangular":
                 cmdMetaData.append('-XMP-GPano:StitchingSoftware="{}"'.format(self.removeEntities(jsonMetaData["StitchingSoftware"])))
                 cmdMetaData.append('-XMP-GPano:SourcePhotosCount="{}"'.format(2))
@@ -800,8 +853,6 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                 logging.error(output)
             else:
                 logging.info(output)
-
-
             cmdstr = {
                 "-GPSLatitude=": img["GPSLatitude"],
                 "-GPSLatitudeRef=": latRef,
@@ -827,19 +878,33 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             else:
                 logging.info(output)
 
-        """gpxData = gpx.to_xml() 
+        gpx = gpxpy.gpx.GPX()
+
+        # Create first track in our GPX:
+        gpx_track = gpxpy.gpx.GPXTrack()
+        gpx.tracks.append(gpx_track)
+
+        # Create first segment in our GPX track:
+        gpx_segment = gpxpy.gpx.GPXTrackSegment()
+        gpx_track.segments.append(gpx_segment)
+
+        for point in self.__allGPSPoints:
+            a = self.latLngToDecimal(point["GPSLatitude"])
+            b = self.latLngToDecimal(point["GPSLongitude"])
+            alt = point["GPSAltitude"].split(" ")[0]
+            t = point["GPSDateTime"]
+            gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=a, longitude=b, time=t, elevation=alt))
+
+        gpxData = gpx.to_xml() 
         gpxFileName = os.getcwd() + os.sep + 'VIDEO_META.gpx'
         with open(gpxFileName, 'w') as f:
             f.write(gpxData)
             f.close()
-            cmd = ["-geotag", gpxFileName, "'-geotime<${datetimeoriginal}-00:00'", '-overwrite_original', imageFolder]
-            output = self._exiftool(cmd)
-            if output.returncode != 0:
-                logging.error(output)
-            else:
-                logging.info(output)
-            os.unlink(gpxFileName)"""
 
+    """
+       __validate function
+       This function is used to validate command-line arguments.
+    """
 
     def __validate(self, args):
         check = self._checkFileExists(args.input)
