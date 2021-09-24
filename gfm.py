@@ -619,14 +619,9 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         gpsDataLatest = {}
         for k, v in data["timePoints"].items():
             betweenTimes.append(k)
-        lst = None
         for t in data["timeDifference"]:
             z = min(betweenTimes, key=lambda x: abs(x - t))
-            if lst == z:
-                gpsDataLatest[t] = None
-            else:
-                gpsDataLatest[t] = data["timePoints"][z]
-                lst = z
+            gpsDataLatest[t] = data["timePoints"][z]
             print("{} {} {} {} {}".format(datetime.datetime.strftime(t, "%Y:%m:%d %H:%M:%S.%f"), datetime.datetime.strftime(z, "%Y:%m:%d %H:%M:%S.%f"), data["timePoints"][z]["GPSLatitude"], data["timePoints"][z]["GPSLongitude"], data["timePoints"][z]["GPSAltitude"]))
         return gpsDataLatest
 
