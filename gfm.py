@@ -732,15 +732,16 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             return data
         t_end = endTime
         diff = (t_end - t_start)/float(frlen)
-        while t < t_end:
-            if i > frlen-1:
-                break
+        print("diff: ", diff)
+        while i < frlen-1:
             t = t+diff
+            #print("{} {}".format(t, diff))
             data[t] = gpsData[i]
+            #print("{} {} {}".format(t, gpsData[i]["GPSLatitude"], gpsData[i]["GPSLongitude"]))
             i = i+1
         for k, v in data.items():
-            print("{} {} {}".format(k, v["GPSLatitude"], v["GPSLongitude"]))
-        print("Count: {}".format(len(data)))
+            print("#{} {} {}".format(k, v["GPSLatitude"], v["GPSLongitude"]))
+        print("Count: {} {}".format(len(data), len(gpsData)))
         return data
 
     def __injectMetadata(self, metaData, images, imageFolder):
