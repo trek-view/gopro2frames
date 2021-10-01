@@ -957,6 +957,9 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                 'longitude', 
                 'altitude', 
                 'horizontal_accuracy', 
+                'distance',
+                'time_difference',
+                'heading',
                 'vertical_accuracy', 
                 'velocity_east',
                 'velocity_north',
@@ -970,11 +973,14 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             for row in data:
                 start = data[i]
                 end = None
+                dist = 0
+                time_diff = 0
+                azimuth1 = 0
+                t_start = datetime.datetime.strptime(data[i]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+                d_start = (self.latLngToDecimal(data[i]["GPSLatitude"]), self.latLngToDecimal(data[i]["GPSLongitude"]))  
                 if i < (len(data)-1):
-                    t_start = datetime.datetime.strptime(data[i]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
                     t_end = datetime.datetime.strptime(data[i+1]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
                     time_diff = (t_end - t_start).total_seconds()
-                    d_start = (self.latLngToDecimal(data[i]["GPSLatitude"]), self.latLngToDecimal(data[i]["GPSLongitude"]))   
                     d_end = (self.latLngToDecimal(data[i+1]["GPSLatitude"]), self.latLngToDecimal(data[i+1]["GPSLongitude"]))    
                     dist = haversine(d_start, d_end)
                     print(d_start, d_end, dist)
@@ -994,16 +1000,20 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                     velocity_up = 0
                     end = None
                 t = datetime.datetime.strptime(row["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
-                t = time.mktime(t.timetuple())
+                t1970 = datetime.datetime.strptime("1970:01:01 00:00:00.000000", "%Y:%m:%d %H:%M:%S.%f")
+                time_gps_epoch = (t-t1970).total_seconds()
                 writer.writerow({
                     'file_name': row["image"],
-                    'time_gps_epoch': t,
+                    'time_gps_epoch': time_gps_epoch,
                     'gps_fix_type': '3D', 
-                    'latitude': row["GPSLatitude"], 
-                    'longitude': row["GPSLongitude"], 
+                    'latitude': d_start[0], 
+                    'longitude': d_start[1], 
                     'altitude': row["GPSAltitude"], 
                     'horizontal_accuracy': '1', 
                     'vertical_accuracy': '1', 
+                    'distance': dist, 
+                    'time_difference': time_diff, 
+                    'heading': azimuth1, 
                     'velocity_east': velocity_east, 
                     'velocity_north': velocity_north, 
                     'velocity_up': velocity_up, 
