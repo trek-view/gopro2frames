@@ -1,4 +1,5 @@
-import subprocess, argparse, platform, logging, datetime, fnmatch, shutil, shlex, html, copy, time, json, csv, os, re
+import subprocess, argparse, platform, logging, datetime, fnmatch, shutil, shlex, html, copy, time, json, math, csv, os, re
+from geographiclib.geodesic import Geodesic
 from haversine import haversine, Unit
 from pathlib import Path
 from lxml import etree
@@ -972,12 +973,20 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                 if i < (len(data)-1):
                     t_start = datetime.datetime.strptime(data[i]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
                     t_end = datetime.datetime.strptime(data[i+1]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+                    time_diff = (t_end - t_start).total_seconds()
                     d_start = (self.latLngToDecimal(data[i]["GPSLatitude"]), self.latLngToDecimal(data[i]["GPSLongitude"]))   
                     d_end = (self.latLngToDecimal(data[i+1]["GPSLatitude"]), self.latLngToDecimal(data[i+1]["GPSLongitude"]))    
                     dist = haversine(d_start, d_end)
-                    velocity_east = 0
-                    velocity_north = 0
-                    velocity_up = 0
+                    print(d_start, d_end, dist)
+                    brng = Geodesic.WGS84.Inverse(d_start[0], d_start[1], d_end[0], d_end[1])
+                    azimuth1 = math.radians(brng['azi1'])
+                    azimuth2 = math.radians(brng['azi2'])
+                    AC = (math.cos(math.radians(azimuth1))*dist)
+                    BC = (math.sin(math.radians(azimuth2))*dist)
+                    print(time_diff, dist, azimuth1, azimuth2, AC, BC)
+                    velocity_east = AC/time_diff
+                    velocity_north = BC/time_diff
+                    velocity_up = 0 if AC == 0 else BC/AC
                     end = data[i+1]
                 else:
                     velocity_east = 0
@@ -1000,6 +1009,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                     'velocity_up': velocity_up, 
                     'speed_accuracy': '0', 
                 })
+                i = i+1
 
 
     """
