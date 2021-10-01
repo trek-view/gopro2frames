@@ -1,4 +1,5 @@
-import subprocess, haversine, argparse, platform, logging, datetime, fnmatch, shutil, shlex, html, copy, time, json, csv, os, re
+import subprocess, argparse, platform, logging, datetime, fnmatch, shutil, shlex, html, copy, time, json, csv, os, re
+from haversine import haversine, Unit
 from pathlib import Path
 from lxml import etree
 from os import walk
@@ -971,8 +972,8 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                 if i < (len(data)-1):
                     t_start = datetime.datetime.strptime(data[i]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
                     t_end = datetime.datetime.strptime(data[i+1]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
-                    d_start = (data[i]["GPSLatitude"], data[i]["GPSLongitude"])   
-                    d_end = (data[i+1]["GPSLatitude"], data[i+1]["GPSLongitude"])    
+                    d_start = (self.latLngToDecimal(data[i]["GPSLatitude"]), self.latLngToDecimal(data[i]["GPSLongitude"]))   
+                    d_end = (self.latLngToDecimal(data[i+1]["GPSLatitude"]), self.latLngToDecimal(data[i+1]["GPSLongitude"]))    
                     dist = haversine(d_start, d_end)
                     velocity_east = 0
                     velocity_north = 0
@@ -984,6 +985,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                     velocity_up = 0
                     end = None
                 t = datetime.datetime.strptime(row["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+                t = time.mktime(t.timetuple())
                 writer.writerow({
                     'file_name': row["image"],
                     'time_gps_epoch': t,
