@@ -878,6 +878,41 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             else:
                 logging.info(output)
 
+        self.__createGeotagGPX(__config, images, __config["imageFolder"]+"_photos")
+
+        self.__createGPXAllPoints(__config, self.__allGPSPoints, __config["imageFolder"]+"_video")
+
+    def __createGeotagGPX(__config, images, name):
+        gpx = gpxpy.gpx.GPX()
+
+        # Create first track in our GPX:
+        gpx_track = gpxpy.gpx.GPXTrack()
+        gpx.tracks.append(gpx_track)
+
+        # Create first segment in our GPX track:
+        gpx_segment = gpxpy.gpx.GPXTrackSegment()
+        gpx_track.segments.append(gpx_segment)
+
+        for point in self.images:
+            a = self.latLngToDecimal(point["GPSLatitude"])
+            b = self.latLngToDecimal(point["GPSLongitude"])
+            alt = point["GPSAltitude"].split(" ")[0]
+            t = point["GPSDateTime"]
+            gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=a, longitude=b, time=t, elevation=alt))
+
+        gpxData = gpx.to_xml() 
+        gpxFileName = imageFolder + os.sep + name +'.gpx'
+        with open(gpxFileName, 'w') as f:
+            f.write(gpxData)
+            f.close()
+            cmd = ["-geotag", gpxFileName, "'-geotime<${datetimeoriginal}-00:00'", '-overwrite_original', __config["imageFolder"]]
+            output = self._exiftool(cmd)
+            if output.returncode != 0:
+                logging.error(output)
+            else:
+                logging.info(output)
+
+    def __createGPXAllPoints(__config, __allGPSPoints, name):
         gpx = gpxpy.gpx.GPX()
 
         # Create first track in our GPX:
@@ -896,10 +931,46 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=a, longitude=b, time=t, elevation=alt))
 
         gpxData = gpx.to_xml() 
-        gpxFileName = imageFolder + os.sep + __config["imageFolder"] +'.gpx'
+        gpxFileName = imageFolder + os.sep + name +'.gpx'
         with open(gpxFileName, 'w') as f:
             f.write(gpxData)
             f.close()
+
+    def __cammCsv(self, data, imageFolder):
+        with open(imageFolder+os.sep+'camm.csv', 'w', newline='') as csvfile:
+            fieldnames = [
+                'file_name', 
+                'time_gps_epoch', 
+                'gps_fix_type', 
+                'latitude', 
+                'longitude', 
+                'altitude', 
+                'horizontal_accuracy', 
+                'vertical_accuracy', 
+                'velocity_east',
+                'velocity_north',
+                'velocity_up',
+                'speed_accuracy'
+            ]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+            writer.writeheader()
+            for row in data:
+                writer.writerow({
+                    'file_name': '',
+                    'time_gps_epoch': '',
+                    'gps_fix_type': '3D', 
+                    'latitude': '', 
+                    'longitude': '', 
+                    'altitude': '', 
+                    'horizontal_accuracy': '1', 
+                    'vertical_accuracy': '1', 
+                    'velocity_east': '', 
+                    'velocity_north': '', 
+                    'velocity_up': '', 
+                    'speed_accuracy': '0', 
+                })
+
 
     """
        __validate function
