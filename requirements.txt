@@ -1,3 +1,4 @@
+geographiclib==1.52
 gpxpy==1.4.2
 haversine==2.5.1
 lxml==4.6.3
