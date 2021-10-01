@@ -1,4 +1,4 @@
-import subprocess, argparse, platform, logging, datetime, fnmatch, shutil, shlex, html, copy, time, json, os, re
+import subprocess, argparse, platform, logging, datetime, fnmatch, shutil, shlex, html, copy, time, json, csv, os, re
 from pathlib import Path
 from lxml import etree
 from os import walk
@@ -877,12 +877,14 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                 logging.error(output)
             else:
                 logging.info(output)
+        
+        self.__createGeotagGPX(__config, images, imageFolder + os.sep + __config["imageFolder"] + "_photos")
 
-        self.__createGeotagGPX(__config, images, __config["imageFolder"]+"_photos")
+        self.__createGPXAllPoints(__config, self.__allGPSPoints, imageFolder + os.sep + __config["imageFolder"] + "_video")
 
-        self.__createGPXAllPoints(__config, self.__allGPSPoints, __config["imageFolder"]+"_video")
+        self.__cammCsv( images, imageFolder )
 
-    def __createGeotagGPX(__config, images, name):
+    def __createGeotagGPX(self, __config, images, name):
         gpx = gpxpy.gpx.GPX()
 
         # Create first track in our GPX:
@@ -893,26 +895,26 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         gpx_segment = gpxpy.gpx.GPXTrackSegment()
         gpx_track.segments.append(gpx_segment)
 
-        for point in self.images:
+        for point in images:
             a = self.latLngToDecimal(point["GPSLatitude"])
             b = self.latLngToDecimal(point["GPSLongitude"])
             alt = point["GPSAltitude"].split(" ")[0]
-            t = point["GPSDateTime"]
+            t = datetime.datetime.strptime(point["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
             gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=a, longitude=b, time=t, elevation=alt))
 
         gpxData = gpx.to_xml() 
-        gpxFileName = imageFolder + os.sep + name +'.gpx'
+        gpxFileName = name +'.gpx'
         with open(gpxFileName, 'w') as f:
             f.write(gpxData)
             f.close()
-            cmd = ["-geotag", gpxFileName, "'-geotime<${datetimeoriginal}-00:00'", '-overwrite_original', __config["imageFolder"]]
+            cmd = ["-geotag", gpxFileName, "'-geotime<${datetimeoriginal}'", '-overwrite_original', __config["imageFolderPath"]]
             output = self._exiftool(cmd)
             if output.returncode != 0:
                 logging.error(output)
             else:
                 logging.info(output)
 
-    def __createGPXAllPoints(__config, __allGPSPoints, name):
+    def __createGPXAllPoints(self, __config, __allGPSPoints, name):
         gpx = gpxpy.gpx.GPX()
 
         # Create first track in our GPX:
@@ -923,7 +925,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         gpx_segment = gpxpy.gpx.GPXTrackSegment()
         gpx_track.segments.append(gpx_segment)
 
-        for point in self.__allGPSPoints:
+        for point in __allGPSPoints:
             a = self.latLngToDecimal(point["GPSLatitude"])
             b = self.latLngToDecimal(point["GPSLongitude"])
             alt = point["GPSAltitude"].split(" ")[0]
@@ -931,7 +933,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=a, longitude=b, time=t, elevation=alt))
 
         gpxData = gpx.to_xml() 
-        gpxFileName = imageFolder + os.sep + name +'.gpx'
+        gpxFileName = name +'.gpx'
         with open(gpxFileName, 'w') as f:
             f.write(gpxData)
             f.close()
@@ -960,9 +962,9 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                     'file_name': '',
                     'time_gps_epoch': '',
                     'gps_fix_type': '3D', 
-                    'latitude': '', 
-                    'longitude': '', 
-                    'altitude': '', 
+                    'latitude': row["GPSLatitude"], 
+                    'longitude': row["GPSLongitude"], 
+                    'altitude': row["GPSAltitude"], 
                     'horizontal_accuracy': '1', 
                     'vertical_accuracy': '1', 
                     'velocity_east': '', 
