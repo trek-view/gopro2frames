@@ -1,4 +1,4 @@
-import subprocess, argparse, platform, logging, datetime, fnmatch, shutil, shlex, html, copy, time, json, csv, os, re
+import subprocess, haversine, argparse, platform, logging, datetime, fnmatch, shutil, shlex, html, copy, time, json, csv, os, re
 from pathlib import Path
 from lxml import etree
 from os import walk
@@ -475,6 +475,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
         self.__validate(args)
 
         filename = args.input
+        __configData["fileName"] = os.path.basename(filename)
         frameRate = args.frame_rate
         imageFolder = os.path.basename(filename).split(".")[0]
         imageFolderPath = os.getcwd() + os.sep + imageFolder+"_"+dateTimeCurrent
@@ -882,7 +883,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
 
         self.__createGPXAllPoints(__config, self.__allGPSPoints, imageFolder + os.sep + __config["imageFolder"] + "_video")
 
-        self.__cammCsv( images, imageFolder )
+        self.__cammCsv( __config, images, imageFolder )
 
     def __createGeotagGPX(self, __config, images, name):
         gpx = gpxpy.gpx.GPX()
@@ -938,7 +939,13 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             f.write(gpxData)
             f.close()
 
-    def __cammCsv(self, data, imageFolder):
+    """
+       __cammCsv function
+       This function will create a csv file containing all the data to create CAMM Telemetry
+    """
+    #https://github.com/trek-view/basecamp/blob/master/_posts/2021-10-07-calculating-velocity-between-two-sequence-photos.md
+    #https://github.com/trek-view/basecamp/blob/master/_posts/2020-01-17-what-direction-are-you-facing.md
+    def __cammCsv(self, __config, data, imageFolder):
         with open(imageFolder+os.sep+'camm.csv', 'w', newline='') as csvfile:
             fieldnames = [
                 'file_name', 
@@ -957,19 +964,38 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
             writer.writeheader()
+            i = 0
             for row in data:
+                start = data[i]
+                end = None
+                if i < (len(data)-1):
+                    t_start = datetime.datetime.strptime(data[i]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+                    t_end = datetime.datetime.strptime(data[i+1]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+                    d_start = (data[i]["GPSLatitude"], data[i]["GPSLongitude"])   
+                    d_end = (data[i+1]["GPSLatitude"], data[i+1]["GPSLongitude"])    
+                    dist = haversine(d_start, d_end)
+                    velocity_east = 0
+                    velocity_north = 0
+                    velocity_up = 0
+                    end = data[i+1]
+                else:
+                    velocity_east = 0
+                    velocity_north = 0
+                    velocity_up = 0
+                    end = None
+                t = datetime.datetime.strptime(row["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
                 writer.writerow({
-                    'file_name': '',
-                    'time_gps_epoch': '',
+                    'file_name': row["image"],
+                    'time_gps_epoch': t,
                     'gps_fix_type': '3D', 
                     'latitude': row["GPSLatitude"], 
                     'longitude': row["GPSLongitude"], 
                     'altitude': row["GPSAltitude"], 
                     'horizontal_accuracy': '1', 
                     'vertical_accuracy': '1', 
-                    'velocity_east': '', 
-                    'velocity_north': '', 
-                    'velocity_up': '', 
+                    'velocity_east': velocity_east, 
+                    'velocity_north': velocity_north, 
+                    'velocity_up': velocity_up, 
                     'speed_accuracy': '0', 
                 })
 
