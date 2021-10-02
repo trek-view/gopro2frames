@@ -948,6 +948,7 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
     #https://github.com/trek-view/basecamp/blob/master/_posts/2021-10-07-calculating-velocity-between-two-sequence-photos.md
     #https://github.com/trek-view/basecamp/blob/master/_posts/2020-01-17-what-direction-are-you-facing.md
     def __cammCsv(self, __config, data, imageFolder):
+        images = fnmatch.filter(os.listdir(imageFolder), '*.jpg')
         with open(imageFolder+os.sep+'camm.csv', 'w', newline='') as csvfile:
             fieldnames = [
                 'file_name', 
@@ -970,6 +971,29 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
 
             writer.writeheader()
             i = 0
+            data = []
+            for img in images:
+                cmd = ["-ee", "-j", "-G3", "-GPSDateTime", "-GPSLatitude", "-GPSLongitude", "-GPSAltitude", imageFolder+os.sep+img]
+                output = self._exiftool(cmd)
+                if output is not None:
+                    row = json.loads(output.stdout.decode('utf-8',"ignore"))
+                    if len(row) > 0:
+                        row = row[0]
+                        print({
+                            "GPSDateTime": row["Main:GPSDateTime"].replace("Z", ""),
+                            "GPSLatitude": row["Main:GPSLatitude"],
+                            "GPSLongitude": row["Main:GPSLongitude"],
+                            "GPSAltitude": row["Main:GPSAltitude"],
+                            "image": img
+                        })
+                        data.append({
+                            "GPSDateTime": row["Main:GPSDateTime"].replace("Z", ""),
+                            "GPSLatitude": row["Main:GPSLatitude"],
+                            "GPSLongitude": row["Main:GPSLongitude"],
+                            "GPSAltitude": row["Main:GPSAltitude"],
+                            "image": img
+                        })
+
             for row in data:
                 start = data[i]
                 end = None
@@ -983,16 +1007,16 @@ class TrekViewGoProMp4(TrekviewPreProcess, TrekviewProcessMp4):
                     time_diff = (t_end - t_start).total_seconds()
                     d_end = (self.latLngToDecimal(data[i+1]["GPSLatitude"]), self.latLngToDecimal(data[i+1]["GPSLongitude"]))    
                     dist = haversine(d_start, d_end)
-                    print(d_start, d_end, dist)
+                    print("lat_lng_start: {}, lat_lng_end: {}, distance: {}".format(d_start, d_end, dist))
                     brng = Geodesic.WGS84.Inverse(d_start[0], d_start[1], d_end[0], d_end[1])
                     azimuth1 = math.radians(brng['azi1'])
                     azimuth2 = math.radians(brng['azi2'])
                     AC = (math.cos(math.radians(azimuth1))*dist)
                     BC = (math.sin(math.radians(azimuth2))*dist)
-                    print(time_diff, dist, azimuth1, azimuth2, AC, BC)
                     velocity_east = AC/time_diff
                     velocity_north = BC/time_diff
                     velocity_up = 0 if AC == 0 else BC/AC
+                    print("time_diff: {}, dist: {}, azimuth1: {}, azimuth2: {}, velocity_east: {}, velocity_north: {}, velocity_up: {}".format(time_diff, dist, azimuth1, azimuth2, AC, BC, velocity_up))
                     end = data[i+1]
                 else:
                     velocity_east = 0
