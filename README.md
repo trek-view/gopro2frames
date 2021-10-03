@@ -5,7 +5,12 @@ Converts GoPro mp4s with equirectangular projections into single frames with cor
 ## Installation
 
 ```
+git clone https://github.com/trek-view/gopro-frame-maker
+cd gopro-frame-maker
+git clone https://github.com/trek-view/FFmpeg
+python3 -m venv gfm
 pip install -r requirements.txt
+
 ```
 
 ## Usage
@@ -115,9 +120,33 @@ GMPF is reported in one of the video tracks.  Different GoPro cameras/modes repo
 	* Spherical Video `<Track3:MetaFormat>gpmd</Track3:MetaFormat>`
 	* Spherical Timewarp `<Track2:MetaFormat>gpmd</Track2:MetaFormat>`
 
-### Step 1: Extract frames
+### Overview of Trek View ffmpeg
 
-Using ffmpeg:
+This script utilises a custom version of ffmpeg:
+
+https://github.com/trek-view/FFmpeg
+
+### Step 1: Convert .360 (only .360 file format)
+
+If the file is .360 fileformat, it must be
+
+```
+ffmpeg -hwaccel auto -hwaccel auto -init_hw_device opencl:0.2 -filter_hw_device opencl0 -v verbose -filter_complex '[0:0]format=yuv420p,hwupload[a] , [0:4]format=yuv420p,hwupload[b], [a][b]gopromax_opencl, hwdownload,format=yuv420p' -i in.360 -c:v libx264 -map_metadata 0 -map 0:3 out.mp4
+```
+
+Where in.360 is input, and out.mp4 is mp4 file with same filename as .360 version.
+
+Note: We only map the telemetry track into the video (-map_metadata). Note, this is variable track2 (in case of timewarp) (-map 0:2) or track3 -map 0:3), etc. You can check correct track by identifying gpmd track in step 1 xml output.
+
+### Step 2: Extract video metadata
+
+```
+exiftool -ee -G3 -api LargeFileSupport=1 -X VIDEO.mp4 > VIDEO_META.xml
+```
+
+### Step 3: Extract frames
+
+For mp4
 
 ```
 ffmpeg -i VIDEO.mp4 -r 5 -q:v 1 img%d.jpg
@@ -125,7 +154,7 @@ ffmpeg -i VIDEO.mp4 -r 5 -q:v 1 img%d.jpg
 
 Where -r is framerate (FPS) and -q:v is quality (1 being the highest).
 
-### Step 2: Setting the frame (photo) times
+### Step 4: Setting the frame (photo) times
 
 #### First frame (all modes)
 
@@ -174,7 +203,7 @@ We therefore explicitly ask use if video was shot in timewarp mode and the setti
 
 To give an example, lets say first photo gets assigned first GPS time = 00:00:01.000 and we extract photos at 5FPS for timewarp mode 30x. in this case second photo has time 00:00:01.000 +6 secs.
 
-### Step 3: Calculating GPS
+### Step 5: Calculating GPS
 
 GoPro reports telemetry at different time intervals, and not every GPS position recorded has a time.
 
@@ -210,7 +239,7 @@ There files are written into a GPX file.
 
 ```
 
-### Step 4: Calculating additional telemetry
+### Step 6: Calculating additional telemetry
 
 The following entries are also created in the gpx file:
 
@@ -261,7 +290,7 @@ They are reported in the gpx like so:
 
 ```
 
-### Step 5: Setting the photo GPS
+### Step 7: Setting the photo GPS
 
 Now we can use the photo time and GPS positions / times to geotag the photos:
 
@@ -288,7 +317,7 @@ This will write the following fields into the photos
  <tr><td>GPS:GPSAltitude</td><td>157.641 m</td></tr>
 </tbody></table>
 
-### Step 6: Create photo GPX
+### Step 8: Create photo GPX
 
 This is identical to step 4, however, the new GPS values from exiftool are used for calculations. This means the number of gps points in the gpx matches the number of photos. In the case of the following fixed fields, the values should be set as follows:
 
@@ -297,7 +326,7 @@ This is identical to step 4, however, the new GPS values from exiftool are used 
 * gps_horizontal_accuracy = 0.1
 * gps_speed_accuracy = 0.1
 			
-### Step 7: Write additional metadata to photo
+### Step 9: Write additional metadata to photo
 
 #### GPX fields
 
@@ -336,7 +365,7 @@ Now we can use the photo gpx file to assign the following values"
 
 Note, some spatial fields are always fixed (e.g. XMP-GPano:SourcePhotosCount b/c GoPro 360 cameras only have 2 lenses), so no video metadata field needs to be extracted and injected.
 
-### Step 8: Done
+### Step 10: Done
 
 You now have:
 
