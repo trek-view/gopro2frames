@@ -131,12 +131,10 @@ https://github.com/trek-view/FFmpeg
 If the file is .360 fileformat, it must be
 
 ```
-ffmpeg -hwaccel auto -hwaccel auto -init_hw_device opencl:0.2 -filter_hw_device opencl0 -v verbose -filter_complex '[0:0]format=yuv420p,hwupload[a] , [0:4]format=yuv420p,hwupload[b], [a][b]gopromax_opencl, hwdownload,format=yuv420p' -i in.360 -c:v libx264 -map_metadata 0 -map 0:3 out.mp4
+ffmpeg -hwaccel auto -hwaccel auto -init_hw_device opencl:0.2 -filter_hw_device opencl0 -v verbose -filter_complex '[0:0]format=yuv420p,hwupload[a] , [0:4]format=yuv420p,hwupload[b], [a][b]gopromax_opencl, hwdownload,format=yuv420p' -i in.360 -c:v libx264 -map_metadata 0 out.mp4
 ```
 
 Where in.360 is input, and out.mp4 is mp4 file with same filename as .360 version.
-
-Note: We only map the telemetry track into the video (-map_metadata). Note, this is variable track2 (in case of timewarp) (-map 0:2) or track3 -map 0:3), etc. You can check correct track by identifying gpmd track in step 1 xml output.
 
 ### Step 2: Extract video metadata
 
