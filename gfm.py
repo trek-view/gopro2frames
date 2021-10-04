@@ -84,6 +84,7 @@ class TrekviewHelpers():
 class TrekViewGoProMp4(TrekviewHelpers):
 
     def __init__(self, args, dateTimeCurrent):
+
         self.__config = {
             "log_path": os.getcwd() + os.sep + "logs",
             "args": args,
@@ -101,10 +102,15 @@ class TrekViewGoProMp4(TrekviewHelpers):
         else:
             videoData = self.__extractVideoInformationPre(args.input, "Track2")
 
-        self.__validateVideo(videoData["video_field_data"])
-
-        self.__breakIntoFrames()
-
+        fileType = self.__validateVideo(videoData["video_field_data"])
+        if fileType == "360":
+            self.__config["fileType"] = '360'
+            filename = self.__convert360tomp4()
+            self.__config["360file"] = filename
+            self.__breakIntoFrames(filename)
+        else:
+            self.__breakIntoFrames(self.__config["args"].input)
+        
         videoData = self.__extractVideoInformation(videoData)
         
         self.__processVideoInformation(videoData)
@@ -213,23 +219,48 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 if videoData["CompressorName"] == "H.265":
                     logging.critical("This does not appear to be a GoPro .360 file. Please use the .360 video created from your GoPro camera only.")
                     exit("This does not appear to be a GoPro .360 file. Please use the .360 video created from your GoPro camera only.")
-                else:
-                    """cmd = [
-                        "-i", self.__config["args"].input, 
-                        "{}{}{}_%06d.jpg".format(
-                            self.__config["imageFolderPath"], 
-                            os.sep, 
-                            self.__config["imageFolder"]+".mp4"
-                        )
-                    ]
-                    output = self._ffmpeg(cmd)"""
+        return videoData["FileType"].strip()
     
+    def __convert360tomp4(self):
+        filename = "{}{}{}.mp4".format(os.getcwd(), os.sep, self.__config["imageFolder"])
+        print("Converting 360 video to mp4 video...")
+        if self.__config["time_warp"] is None:
+            trackmap = '0:3'
+        else:
+            trackmap = '0:2'
+        cmd = [
+            '-hwaccel', 
+            'auto',
+            '-hwaccel', 
+            'auto', 
+            '-init_hw_device', 
+            'opencl:0.2', 
+            '-filter_hw_device', 
+            'opencl0', 
+            '-v', 
+            'verbose', 
+            '-filter_complex', 
+            '[0:0]format=yuv420p,hwupload[a] , [0:4]format=yuv420p,hwupload[b], [a][b]gopromax_opencl, hwdownload,format=yuv420p', 
+            '-i', 
+            self.__config["args"].input, 
+            '-c:v', 
+            'libx264', 
+            '-map_metadata', 
+            '-map', 
+            trackmap,
+            '0',
+            '-y',
+            filename
+        ]
+        output = self._ffmpeg(cmd)
+        return filename
+
     def __createDirectories(self):
         if os.path.exists(self.__config["imageFolderPath"]):
             shutil.rmtree(self.__config["imageFolderPath"])
         os.makedirs(self.__config["imageFolderPath"], exist_ok=True) 
 
-    def __breakIntoFrames(self):
+    def __breakIntoFrames(self, filename):
         logging.info("Running ffmpeg to extract images...")
         print("Please wait while image extraction is complete.\nRunning ffmpeg to extract images...")
         test_str = ""
@@ -243,7 +274,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 self.__config["frame_rate"], tw
             )
         cmd = [
-            "-i", self.__config["args"].input, 
+            "-i", filename, 
             "-r", str(self.__config["frame_rate"]), 
             "-q:v", str(self.__config["quality"]), 
             "{}{}{}{}_%06d.jpg".format(
