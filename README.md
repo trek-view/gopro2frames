@@ -7,9 +7,9 @@ Converts GoPro mp4s with equirectangular projections into single frames with cor
 ```
 git clone https://github.com/trek-view/gopro-frame-maker
 cd gopro-frame-maker
-python3 -m venv gfm
-pip install -r requirements.txt
-
+python3 -m venv env
+source env/bin/activate
+pip3 install -r requirements.txt
 ```
 To use Custom FFmpeg after cloning from the repo run following commands:
 
@@ -20,19 +20,24 @@ cd FFmpeg
 make
 ```
 
-Wait for it to build and then go back to your main directory
+_Note: on some MacOS machines, you might need to install YASM before running the `./configure` command: `brew install yasm`._
+
+Wait for it to build (this might take some time) and then go back to your main directory
+
 ```
 cd ..
 ```
 
-Now you can run gfm.py, by default the path of ffmpeg is ./FFmpeg/ffmpeg
+Now you can run gfm.py, by default the path of the custom ffmpeg just installed is ./FFmpeg/ffmpeg so you only need to run:
+
 ```
-python gfm.py ./mp4file
+python3 gfm.py ./mp4file
 ```
 
-but that can be changed by passing a command-line argument:
+but if you install in a custom way, the path to ffmpeg can be changed by passing the path in the command-line argument:
+
 ```
-python gfm.py -f ./path-to-your-ffmpeg-directory/ffmpeg ./mp4file
+python3 gfm.py -f ./path-to-your-ffmpeg-directory/ffmpeg ./mp4file
 ```
 
 ## Usage
