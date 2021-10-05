@@ -34,7 +34,7 @@ Now you can run gfm.py, by default the path of the custom ffmpeg just installed 
 python3 gfm.py ./mp4file
 ```
 
-but if you install in a custom way, the path to ffmpeg can be changed by passing the path in the command-line argument:
+but if you install in a custom way, the path to ffmpeg can be changed by passing the `-f` flag with the ffmpeg path in the command-line argument:
 
 ```
 python3 gfm.py -f ./path-to-your-ffmpeg-directory/ffmpeg ./mp4file
@@ -83,7 +83,7 @@ If the script fails any of these checks, you will see an error returned.
 ### Options
 
 ```
-$ gopro-frame-maker.py [options] VIDEO_NAME.mp4
+$ gfm.py [options] VIDEO_NAME.mp4
 ```
 
 Options:
@@ -105,31 +105,32 @@ Options:
 	* `15x`
 	* `30x`
 * -d enable debug mode, default: false. If flag is passed, will be set to true.
+* -f custom ffmpeg install path, default: none
 
 #### Examples (MacOS)
 
 ##### Extract at a frame rate of 1 FPS
 
 ```
-$ gopro-frame-maker.py -r 1 GS018422.mp4
+$ gfm.py -r 1 GS018422.mp4
 ```
 
 ##### Run with debug mode
 
 ```
-$ gopro-frame-maker.py -d GS018422.mp4
+$ gfm.py -d GS018422.mp4
 ```
 
 ##### Extract frames at lowest quality
 
 ```
-$ gopro-frame-maker.py -q 5 GS018422.mp4
+$ gfm.py -q 5 GS018422.mp4
 ```
 
 ##### Extract from a timewarp video shot at 5x speed
 
 ```
-$ gopro-frame-maker.py -t 5x GS018422.mp4
+$ gfm.py -t 5x GS018422.mp4
 ```
 
 ## How it works
