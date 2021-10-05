@@ -440,7 +440,6 @@ class TrekViewGoProMp4(TrekviewHelpers):
         images = fnmatch.filter(os.listdir(self.__config["imageFolderPath"]), '*.jpg')
         allGps = videoFieldData["allGps"]
         videoFieldData = videoFieldData["video_field_data"]
-        timesBetween = []
         timestamps = []
         gpsData = []
         pData = []
@@ -475,58 +474,96 @@ class TrekViewGoProMp4(TrekviewHelpers):
             if check == dlen:
                 gpsData.append(data.copy())
                 break
+        timesBetween = []
         dlen = len(gpsData)
-        diff = int(((100.0/float(self.__config["frame_rate"]))/100.0)*100.0)
-        for i in range(0, dlen):
-            dlist = list(gpsData[i].items())
-            dlist = dlist[0]
-            if i < dlen-1:
-                delist = list(gpsData[i+1].items())
-                delist = delist[0]
-                start = datetime.datetime.strptime(dlist[0], "%Y:%m:%d %H:%M:%S.%f")
-                timesBetween.append(start)
-                end = datetime.datetime.strptime(delist[0], "%Y:%m:%d %H:%M:%S.%f")
-                diff = int(((end - start).total_seconds()/float(len(dlist[1])))*1000.0)
-                #check this later
-                if diff == 0:
-                    """zend = end
-                    for tbet in timesBetween:
-                        if tbet >= end:
-                            diff = int(((end - start).total_seconds()/float(len(dlist[1])))*1000.0)
-                            break
-                        start = tbet
-                    print('##', start, end)"""
-                    if start == end:
-                        start = end
-                        diff = int((0.05)*1000.0)
-                        end = end+datetime.timedelta(0, 0.05) 
-                #print(diff, end, start, len(dlist[1]))
-                new = pd.date_range(start=start, end=end, closed='left', freq="{}ms".format(diff))
-                ii = 0 
-                for n in dlist[1]:
-                    dlist[1][ii]['GPSDateTime'] = new[ii]
-                    pData.append(dlist[1][ii].copy())
-                    ii = ii+1
-            else:
-                diff = int((0.05)*1000.0)
-                new = pd.date_range(start=start, periods=len(dlist[1]), closed='left', freq="{}ms".format(diff))
-                ii = 0 
-                for n in dlist[1]:
-                    dlist[1][ii]['GPSDateTime'] = new[ii]
-                    pData.append(dlist[1][ii].copy())
-                    ii = ii+1
-            i = i+1
-        self.__createAllGpsGpx(pData)
-        timeData = pd.DataFrame(pData)
-        start = datetime.datetime.strptime(timestamps[0], "%Y:%m:%d %H:%M:%S.%f")
-        timestamps = self.__getImageSequenceTimestamps(start, images, gpsFields, pData)
-        #timestamps.to_csv('./01.csv', sep=',', encoding='utf-8', index=False)
+        tw = self.__config["time_warp"]
+        if tw is None:
+            diff = int(((100.0/float(self.__config["frame_rate"]))/100.0)*100.0)
+            for i in range(0, dlen):
+                dlist = list(gpsData[i].items())
+                dlist = dlist[0]
+                if i < dlen-1:
+                    delist = list(gpsData[i+1].items())
+                    delist = delist[0]
+                    start = datetime.datetime.strptime(dlist[0], "%Y:%m:%d %H:%M:%S.%f")
+                    timesBetween.append(start)
+                    end = datetime.datetime.strptime(delist[0], "%Y:%m:%d %H:%M:%S.%f")
+                    diff = int(((end - start).total_seconds()/float(len(dlist[1])))*1000.0)
+                    #check this later
+                    if diff == 0:
+                        """zend = end
+                        for tbet in timesBetween:
+                            if tbet >= end:
+                                diff = int(((end - start).total_seconds()/float(len(dlist[1])))*1000.0)
+                                break
+                            start = tbet
+                        print('##', start, end)"""
+                        if start == end:
+                            start = end
+                            diff = int((0.05)*1000.0)
+                            end = end+datetime.timedelta(0, 0.05) 
+                    #print(diff, end, start, len(dlist[1]))
+                    new = pd.date_range(start=start, end=end, closed='left', freq="{}ms".format(diff))
+                    ii = 0 
+                    for n in dlist[1]:
+                        dlist[1][ii]['GPSDateTime'] = new[ii]
+                        pData.append(dlist[1][ii].copy())
+                        ii = ii+1
+                else:
+                    diff = int((0.05)*1000.0)
+                    new = pd.date_range(start=start, periods=len(dlist[1]), closed='left', freq="{}ms".format(diff))
+                    ii = 0 
+                    for n in dlist[1]:
+                        dlist[1][ii]['GPSDateTime'] = new[ii]
+                        pData.append(dlist[1][ii].copy())
+                        ii = ii+1
+                i = i+1
+            self.__createAllGpsGpx(pData)
+            timeData = pd.DataFrame(pData)
+            start = datetime.datetime.strptime(timestamps[0], "%Y:%m:%d %H:%M:%S.%f")
+            timestamps = self.__getImageSequenceTimestamps(start, images, gpsFields, pData)
+            #timestamps.to_csv('./01.csv', sep=',', encoding='utf-8', index=False)
+        else:
+            timestamps = self.getTimewrapTimestamps(gpsData, images)
         data = {
             "video_field_data": videoFieldData,
             "timestamps": timestamps,
             "images": images
         }
         return data
+
+    def getTimewrapTimestamps(self, gpsData, images):
+        dlen = len(gpsData)
+        if dlen < 1:
+            return pd.DataFrame([])
+        tw = self.__config["time_warp"]
+        fr = self.__config["frame_rate"]
+        tw = int(tw.replace('x', ''))
+        if fr < 1:
+            fr = 5
+        tw = float(tw)/float(fr)
+        ms = int(tw*1000.0)
+        i = 0
+        timesBetween = []
+        timeData = []
+        for gvalue in gpsData:
+            dlist = list(gpsData[i].items())
+            dlist = dlist[0]
+            if i == 0:
+                start = datetime.datetime.strptime(dlist[0], "%Y:%m:%d %H:%M:%S.%f")
+            timesBetween.append(datetime.datetime.strptime(dlist[0], "%Y:%m:%d %H:%M:%S.%f"))
+            dlist[1][0]['GPSDateTime'] = datetime.datetime.strptime(dlist[0], "%Y:%m:%d %H:%M:%S.%f")
+            timeData.append(dlist[1][0])
+            i = i + 1
+        times = pd.date_range(start=start, periods=len(images), freq="{}ms".format(ms))
+        tData = []
+        for t in times:
+            z = min(timesBetween, key=lambda x: abs(x - t))
+            for tdt in timeData:
+                if tdt["GPSDateTime"] == z:
+                    tData.append(tdt.copy())
+        return pd.DataFrame(tData)
+        
 
     """
        __cammCsv function
