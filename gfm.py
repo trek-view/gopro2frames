@@ -63,11 +63,19 @@ class TrekviewHelpers():
             exit("Error occured while executing exiftool.")
         return ret
 
-    def _ffmpeg(self, command, sh=0):
-        if platform.system() == "Windows":
-            ffmpeg = "ffmpeg.exe"
+    def setFFmpegPath(self, path):
+        if path == "":
+            if platform.system() == "Windows":
+                ffmpeg = "./FFmpeg/ffmpeg.exe"
+            else:
+                ffmpeg = "./FFmpeg/ffmpeg"
         else:
-            ffmpeg = "ffmpeg"
+            ffmpeg = path
+        self.ffmpeg = ffmpeg
+        print("ffmpeg path: {} is being used".format(self.ffmpeg))
+    
+    def _ffmpeg(self, command, sh=0):
+        ffmpeg = self.ffmpeg
         command.insert(0, ffmpeg)
         ret = self.__subprocess(command, sh)
         if ret["error"] is not None:
@@ -171,6 +179,14 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 self.__config["quality"] = quality
         else:
             self.__config["quality"] = 1
+
+        if (args.ffmpeg_path is not None):
+            check = self._checkFileExists(args.ffmpeg_path)
+            if check == False:
+                exit("{} does not exists.".format(args.input))
+            self.setFFmpegPath(args.ffmpeg_path)
+        else:
+            self.setFFmpegPath("")
     
     def __validateVideo(self, videoData):
         fileStat = os.stat(self.__config["args"].input)
@@ -383,13 +399,16 @@ class TrekViewGoProMp4(TrekviewHelpers):
             'FileSize',
             'FileType',
             'FileTypeExtension',
-            'CompressorName'
+            'CompressorName',
+            'GPSMeasureMode'
+
         ] 
         gpsFields = [
             'GPSDateTime', 
             'GPSLatitude', 
             'GPSLongitude', 
-            'GPSAltitude'
+            'GPSAltitude',
+            'GPSHPositioningError'
         ]
         _xmlData = self.__getXMLData(root, videoInfoFields, gpsFields, Track)
         return _xmlData
@@ -408,13 +427,15 @@ class TrekViewGoProMp4(TrekviewHelpers):
             'FileSize',
             'FileType',
             'FileTypeExtension',
-            'CompressorName'
+            'CompressorName',
+            'GPSMeasureMode'
         ] 
         gpsFields = [
             'GPSDateTime', 
             'GPSLatitude', 
             'GPSLongitude', 
-            'GPSAltitude'
+            'GPSAltitude',
+            'GPSHPositioningError'
         ]
         images = fnmatch.filter(os.listdir(self.__config["imageFolderPath"]), '*.jpg')
         allGps = videoFieldData["allGps"]
@@ -442,7 +463,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 check = check + 1
             else:
                 j = 0
-                while j < 3:
+                while j < 4:
                     dlist = list(allGps[check].items())
                     dlist = dlist[0]
                     if dlist[0] == "GPSDateTime":
@@ -515,15 +536,18 @@ class TrekViewGoProMp4(TrekviewHelpers):
     #https://github.com/trek-view/basecamp/blob/master/_posts/2020-01-17-what-direction-are-you-facing.md
     def __cammCsv(self, data):
         print("Starting to create CAMM csv file.")
+
         gpsData = []
         cammData = []
         for img in data["images"]:
             cmd = ["-ee", "-j", "-G3", "-GPSDateTime", "-GPSLatitude", "-GPSLongitude", "-GPSAltitude", self.__config["imageFolderPath"] + os.sep + img]
             output = self._exiftool(cmd)
+            print(output)
             if output["output"] is not None:
                 row = json.loads(output["output"])
                 if len(row) > 0:
-                    row = row[0]
+                    #row = row[0]
+                    print(row)
                     gpsData.append({
                         "GPSDateTime": row["Main:GPSDateTime"].replace("Z", ""),
                         "GPSLatitude": row["Main:GPSLatitude"],
@@ -532,61 +556,130 @@ class TrekViewGoProMp4(TrekviewHelpers):
                         "image": img
                     })
             i = 0
-            for row in gpsData:
-                start = gpsData[i]
+        for row in gpsData:
+            start = gpsData[i]
+            end = None
+            dist = 0
+            time_diff = 0
+            azimuth1 = 0
+            t_start = datetime.datetime.strptime(gpsData[i]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+            d_start = (self.latLngToDecimal(gpsData[i]["GPSLatitude"]), self.latLngToDecimal(gpsData[i]["GPSLongitude"]))  
+            if i < (len(gpsData)-1):
+                t_end = datetime.datetime.strptime(gpsData[i+1]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+                time_diff = (t_end - t_start).total_seconds()
+                d_end = (self.latLngToDecimal(gpsData[i+1]["GPSLatitude"]), self.latLngToDecimal(gpsData[i+1]["GPSLongitude"]))    
+                dist = haversine(d_start, d_end)
+                brng = Geodesic.WGS84.Inverse(d_start[0], d_start[1], d_end[0], d_end[1])
+                azimuth1 = math.radians(brng['azi1'])
+                azimuth2 = math.radians(brng['azi2'])
+                AC = (math.cos(math.radians(azimuth1))*dist)
+                BC = (math.sin(math.radians(azimuth2))*dist)
+                gps_velocity_east_next = 0 if time_diff < 1 else AC/time_diff  
+                gps_velocity_north_next = 0 if time_diff < 1 else BC/time_diff
+                gps_velocity_up_next = 0 if AC == 0 else BC/AC
+                gps_speed_next = gpsData[i+1]["GPSSpeed"]
+                gps_azimuth_next = azimuth1
+                gps_pitch_next = 0
+                gps_distance_next = dist
+                gps_time_next = time_diff
+                #print("time_diff: {}, dist: {}, azimuth1: {}, azimuth2: {}, velocity_east: {}, velocity_north: {}, velocity_up: {}".format(time_diff, dist, azimuth1, azimuth2, AC, BC, velocity_up))
+                end = gpsData[i+1]
+            else:
+                gps_velocity_east_next = 0
+                gps_velocity_north_next = 0
+                gps_velocity_up_next = 0
+                gps_speed_next = 0
+                gps_azimuth_next = 0
+                gps_pitch_next = 0
+                gps_distance_next = 0
+                gps_time_next = 0
                 end = None
-                dist = 0
-                time_diff = 0
-                azimuth1 = 0
-                t_start = datetime.datetime.strptime(gpsData[i]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
-                d_start = (self.latLngToDecimal(gpsData[i]["GPSLatitude"]), self.latLngToDecimal(gpsData[i]["GPSLongitude"]))  
-                if i < (len(gpsData)-1):
-                    t_end = datetime.datetime.strptime(gpsData[i+1]["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
-                    time_diff = (t_end - t_start).total_seconds()
-                    d_end = (self.latLngToDecimal(gpsData[i+1]["GPSLatitude"]), self.latLngToDecimal(gpsData[i+1]["GPSLongitude"]))    
-                    dist = haversine(d_start, d_end)
-                    brng = Geodesic.WGS84.Inverse(d_start[0], d_start[1], d_end[0], d_end[1])
-                    azimuth1 = math.radians(brng['azi1'])
-                    azimuth2 = math.radians(brng['azi2'])
-                    AC = (math.cos(math.radians(azimuth1))*dist)
-                    BC = (math.sin(math.radians(azimuth2))*dist)
-                    velocity_east = 0 if time_diff < 1 else AC/time_diff  
-                    velocity_north = 0 if time_diff < 1 else BC/time_diff
-                    velocity_up = 0 if AC == 0 else BC/AC
-                    #print("time_diff: {}, dist: {}, azimuth1: {}, azimuth2: {}, velocity_east: {}, velocity_north: {}, velocity_up: {}".format(time_diff, dist, azimuth1, azimuth2, AC, BC, velocity_up))
-                    end = gpsData[i+1]
-                else:
-                    velocity_east = 0
-                    velocity_north = 0
-                    velocity_up = 0
-                    end = None
-                t = datetime.datetime.strptime(row["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
-                t1970 = datetime.datetime.strptime("1970:01:01 00:00:00.000000", "%Y:%m:%d %H:%M:%S.%f")
-                time_gps_epoch = (t-t1970).total_seconds()
-                cammData.append({
-                    'file_name': row["image"],
-                    'time_gps_epoch': time_gps_epoch,
-                    'gps_fix_type': '3D', 
-                    'latitude': d_start[0], 
-                    'longitude': d_start[1], 
-                    'altitude': row["GPSAltitude"], 
-                    'horizontal_accuracy': '1', 
-                    'vertical_accuracy': '1', 
-                    'distance': dist, 
-                    'time_difference': time_diff, 
-                    'heading': azimuth1, 
-                    'velocity_east': velocity_east, 
-                    'velocity_north': velocity_north, 
-                    'velocity_up': velocity_up, 
-                    'speed_accuracy': '0', 
-                })
-                i = i+1
+            t = datetime.datetime.strptime(row["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+            t1970 = datetime.datetime.strptime("1970:01:01 00:00:00.000000", "%Y:%m:%d %H:%M:%S.%f")
+            time_gps_epoch = (t-t1970).total_seconds()
+            cammData.append({
+                'gps_epoch': time_gps_epoch,
+                'gps_fix_type': data["video_field_data"]["ProjectionType"], 
+                'gps_horizontal_accuracy': row["GPSHPositioningError"], 
+                'gps_vertical_accuracy': row["GPSHPositioningError"], 
+                'gps_velocity_east_next': gps_velocity_east_next,
+                'gps_velocity_north_next': gps_velocity_north_next,
+                'gps_velocity_up_next': gps_velocity_up_next,
+                'gps_speed_next': gps_speed_next,
+                'gps_azimuth_next': gps_azimuth_next,
+                'gps_pitch_next': gps_pitch_next,
+                'gps_distance_next': gps_distance_next,
+                'gps_time_next': gps_time_next,
+                'gps_speed_accuracy': '0.1'
+            })
+            a = self.latLngToDecimal(row["GPSLatitude"])
+            b = self.latLngToDecimal(row["GPSLongitude"])
+            alt = row["GPSAltitude"].split(" ")[0]
+            t = row["GPSDateTime"]
+            gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=a, longitude=b, time=t, elevation=alt, extensions={
+                'gps_epoch': time_gps_epoch,
+                'gps_fix_type': data["video_field_data"]["ProjectionType"], 
+                'gps_horizontal_accuracy': row["GPSHPositioningError"], 
+                'gps_vertical_accuracy': row["GPSHPositioningError"], 
+                'gps_velocity_east_next': gps_velocity_east_next,
+                'gps_velocity_north_next': gps_velocity_north_next,
+                'gps_velocity_up_next': gps_velocity_up_next,
+                'gps_speed_next': gps_speed_next,
+                'gps_azimuth_next': gps_azimuth_next,
+                'gps_pitch_next': gps_pitch_next,
+                'gps_distance_next': gps_distance_next,
+                'gps_time_next': gps_time_next,
+                'gps_speed_accuracy': '0.1'
+            }))
+            """
+            +gps_epoch
+            +gps_fix_type data["video_field_data"]["ProjectionType"]
+            +gps_vertical_accuracy GPSHPositioningError
+            +gps_horizontal_accuracy
+            +gps_velocity_east_next
+            +gps_velocity_north_next
+            +gps_velocity_up_next
+            +gps_speed_accuracy
+            +gps_speed_next
+            +gps_azimuth_next
+            +gps_pitch_next
+            +gps_distance_next
+            +gps_time_next
+            """
+            """
+            cammData.append({
+                'file_name': row["image"],
+                'time_gps_epoch': time_gps_epoch,
+                'gps_fix_type': data["video_field_data"]["ProjectionType"], 
+                'latitude': d_start[0], 
+                'longitude': d_start[1], 
+                'altitude': row["GPSAltitude"], 
+                'horizontal_accuracy': '1', 
+                'vertical_accuracy': '1', 
+                'distance': dist, 
+                'time_difference': time_diff, 
+                'heading': azimuth1, 
+                'velocity_east': velocity_east, 
+                'velocity_north': velocity_north, 
+                'velocity_up': velocity_up, 
+                'speed_accuracy': '0', 
+            })
+            """
+            i = i+1
+        gpxData = gpx.to_xml() 
+        gpxFileName = self.__config["imageFolder"] + "_photos.gpx"
+        gpxFileName = self.__saveXmlMetaFile(gpxFileName, gpxData)
+        if gpxFileName is None:
+            exit("Unable to save gpx file.")
+        cmd = ["-geotag", gpxFileName, "'-geotime<${subsecdatetimeoriginal}'", '-overwrite_original', self.__config["imageFolderPath"]]
+        output = self._exiftool(cmd)
         pdcammData = pd.DataFrame(cammData)
         pdcammData.to_csv(self.__config["imageFolderPath"] + os.sep + 'camm.csv', sep=',', encoding='utf-8', index=False)
         print("CAMM csv file created.")
 
     def __processVideoInformation(self, data):
         print("Starting to inject metadata into the images...")
+        i = 0
         gpx = gpxpy.gpx.GPX()
 
         # Create first track in our GPX:
@@ -596,7 +689,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
         # Create first segment in our GPX track:
         gpx_segment = gpxpy.gpx.GPXTrackSegment()
         gpx_track.segments.append(gpx_segment)
-        i = 0
+
         #print('########', len(data["images"]), len(data["timestamps"]))
         for img in data["images"]:
             image = img
@@ -630,12 +723,105 @@ class TrekViewGoProMp4(TrekviewHelpers):
             cmdMetaData.append('-overwrite_original')
             cmdMetaData.append("{}{}{}".format(self.__config["imageFolderPath"], os.sep, img["image"]))
             output = self._exiftool(cmdMetaData)
-            i = i + 1
+            
             a = self.latLngToDecimal(img["GPSLatitude"])
             b = self.latLngToDecimal(img["GPSLongitude"])
             alt = img["GPSAltitude"].split(" ")[0]
             t = img["GPSDateTime"]
-            gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=a, longitude=b, time=t, elevation=alt))
+            dist = 0
+            time_diff = 0
+            azimuth1 = 0
+            if i < len(data["timestamps"])-1:
+                image_next = img
+                img_next = data["timestamps"].iloc[i+1].copy()
+                img_next["image"] = image_next
+                t_start = img["GPSDateTime"]
+                d_start = (self.latLngToDecimal(img["GPSLatitude"]), self.latLngToDecimal(img["GPSLongitude"])) 
+                t_end = img_next["GPSDateTime"]
+                time_diff = (t_end - t_start).total_seconds()
+                d_end = (self.latLngToDecimal(img_next["GPSLatitude"]), self.latLngToDecimal(img_next["GPSLongitude"]))    
+                dist = haversine(d_start, d_end)
+                brng = Geodesic.WGS84.Inverse(d_start[0], d_start[1], d_end[0], d_end[1])
+                azimuth1 = math.radians(brng['azi1'])
+                azimuth2 = math.radians(brng['azi2'])
+                AC = (math.cos(math.radians(azimuth1))*dist)
+                BC = (math.sin(math.radians(azimuth2))*dist)
+                gps_velocity_east_next = 0 if time_diff < 1 else AC/time_diff  
+                gps_velocity_north_next = 0 if time_diff < 1 else BC/time_diff
+                gps_velocity_up_next = 0 if AC == 0 else BC/AC
+                gps_speed_next = 0#img_next["GPSSpeed"]
+                gps_azimuth_next = azimuth1
+                gps_pitch_next = 0
+                gps_distance_next = dist
+                gps_time_next = time_diff
+            else:
+                gps_velocity_east_next = 0
+                gps_velocity_north_next = 0
+                gps_velocity_up_next = 0
+                gps_speed_next = 0
+                gps_azimuth_next = 0
+                gps_pitch_next = 0
+                gps_distance_next = 0
+                gps_time_next = 0
+            i = i + 1
+            t = img["GPSDateTime"]
+            t1970 = datetime.datetime.strptime("1970:01:01 00:00:00.000000", "%Y:%m:%d %H:%M:%S.%f")
+            time_gps_epoch = (t-t1970).total_seconds()
+            gpx_point = gpxpy.gpx.GPXTrackPoint(latitude=a, longitude=b, time=t, elevation=alt)
+            gpx_segment.points.append(gpx_point)
+            gpx_extension = ET.fromstring(f"""
+                <gps_epoch>{str(time_gps_epoch)}</gps_epoch>
+            """)
+            gpx_point.extensions.append(gpx_extension)
+            gpx_extension = ET.fromstring(f"""
+                <gps_fix_type>{data["video_field_data"]["ProjectionType"]}</gps_fix_type>
+            """)
+            gpx_point.extensions.append(gpx_extension)
+            gpx_extension = ET.fromstring(f"""
+                <gps_vertical_accuracy>{str(img["GPSHPositioningError"])}</gps_vertical_accuracy>
+            """)
+            gpx_point.extensions.append(gpx_extension)
+            gpx_extension = ET.fromstring(f"""
+                <gps_horizontal_accuracy>{str(img["GPSHPositioningError"])}</gps_horizontal_accuracy>
+            """)
+            gpx_point.extensions.append(gpx_extension)
+            gpx_extension = ET.fromstring(f"""
+                <gps_velocity_east_next>{str(gps_velocity_east_next)}</gps_velocity_east_next>
+            """)
+            gpx_point.extensions.append(gpx_extension)
+            gpx_extension = ET.fromstring(f"""
+                <gps_velocity_north_next>{str(gps_velocity_north_next)}</gps_velocity_north_next>
+            """)
+            gpx_point.extensions.append(gpx_extension)
+            gpx_extension = ET.fromstring(f"""
+                <gps_velocity_up_next>{str(gps_velocity_up_next)}</gps_velocity_up_next>
+            """)
+            gpx_point.extensions.append(gpx_extension)
+            gpx_extension = ET.fromstring(f"""
+                <gps_speed_accuracy>{str(gps_speed_next)}</gps_speed_accuracy>
+            """)
+            gpx_point.extensions.append(gpx_extension)
+            gpx_extension = ET.fromstring(f"""
+                <gps_speed_next>{str(gps_azimuth_next)}</gps_speed_next>
+            """)
+            gpx_point.extensions.append(gpx_extension)
+            gpx_extension = ET.fromstring(f"""
+                <gps_azimuth_next>{str(gps_pitch_next)}</gps_azimuth_next>
+            """)
+            gpx_point.extensions.append(gpx_extension)
+            gpx_extension = ET.fromstring(f"""
+                <gps_pitch_next>{str(gps_distance_next)}</gps_pitch_next>
+            """)
+            gpx_point.extensions.append(gpx_extension)
+            gpx_extension = ET.fromstring(f"""
+                <gps_distance_next>{str(gps_time_next)}</gps_distance_next>
+            """)
+            gpx_point.extensions.append(gpx_extension)
+            gpx_extension = ET.fromstring(f"""
+                <gps_time_next>0.1</gps_time_next>
+            """)
+            gpx_point.extensions.append(gpx_extension)
+            
         gpxData = gpx.to_xml() 
         gpxFileName = self.__config["imageFolder"] + "_photos.gpx"
         gpxFileName = self.__saveXmlMetaFile(gpxFileName, gpxData)
@@ -643,14 +829,17 @@ class TrekViewGoProMp4(TrekviewHelpers):
             exit("Unable to save gpx file.")
         cmd = ["-geotag", gpxFileName, "'-geotime<${subsecdatetimeoriginal}'", '-overwrite_original', self.__config["imageFolderPath"]]
         output = self._exiftool(cmd)
-
-        self.__cammCsv(data)
+        #pdcammData = pd.DataFrame(cammData)
+        #pdcammData.to_csv(self.__config["imageFolderPath"] + os.sep + 'camm.csv', sep=',', encoding='utf-8', index=False)
+        #print("CAMM csv file created.")
+        #self.__cammCsv(data)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("input", type=str, help="Input a valid video file.")
     parser.add_argument("-r", "--frame-rate", type=int, help="Sets the frame rate (frames per second) for extraction, default: 5.", default=5)
     parser.add_argument("-t", "--time-warp", type=str, help="Set time warp mode for gopro. available values are 2x, 5x, 10x, 15x, 30x")
+    parser.add_argument("-f", "--ffmpeg-path", type=str, help="Set the path for ffmpeg.")
     parser.add_argument("-q", "--quality", type=int, help="Sets the extracted quality between 2-6. 1 being the highest quality (but slower processing), default: 1. This is value used for ffmpeg -q:v flag. ", default=1)
     parser.add_argument("-d", "--debug", action='store_true', help="Enable debug mode, default: off.")
     args = parser.parse_args()
