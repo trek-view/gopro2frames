@@ -256,25 +256,29 @@ class TrekViewGoProMp4(TrekviewHelpers):
             trackmap = '0:2'
         cmd = [
             '-hwaccel', 
-            'auto',
-            '-hwaccel', 
-            'auto', 
-            '-init_hw_device', 
-            'opencl:0.2', 
-            '-filter_hw_device', 
-            'opencl0', 
-            '-v', 
-            'verbose', 
-            '-filter_complex', 
-            '[0:0]format=yuv420p,hwupload[a] , [0:4]format=yuv420p,hwupload[b], [a][b]gopromax_opencl, hwdownload,format=yuv420p', 
+            'cuda', 
             '-i', 
-            self.__config["args"].input, 
+            self.__config["args"].input,
+            '-init_hw_device',
+            'opencl0:0',
+            '-filter_hw_device', 
+            'opencl0' 
+            '-v',
+            'info',
+            '-filter_complex',
+            "[0:0]format='yuv420p',hwupload[a], [0:5]format='yuv420p',hwupload[b], [a][b]gopromax_opencl,hwdownload,format='yuv420p',",
             '-c:v', 
-            'libx264', 
-            '-map_metadata', 
-            '-map', 
+            'hevc_nvenc', 
+            '-preset' ,
+            'slow',
+            '-b:v',
+            '50M', 
+            '-maxrate:v',
+            '60M',
+            '-map_metadata',
+            '0', 
+            '-map',
             trackmap,
-            '0',
             '-y',
             filename
         ]
@@ -727,9 +731,9 @@ class TrekViewGoProMp4(TrekviewHelpers):
         photosLen = len(data['images'])
         for img in data['images']:
             gps_speed_accuracy_meters = '0.1'
-            gps_fix_type = ''
-            gps_vertical_accuracy_meters = ''
-            gps_horizontal_accuracy_meters = ''
+            gps_fix_type = '3'
+            gps_vertical_accuracy_meters = '0.1'
+            gps_horizontal_accuracy_meters = '0.1'
             if counter < photosLen - 1:
                 photo = [data['images'][counter], data['images'][counter + 1]]
                 #Get metadata from exiftool
@@ -769,6 +773,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 gps_velocity_north_next_meters_second = 0 if time_diff == 0.0 else BC/time_diff
                 gps_velocity_up_next_meters_second = 0 if AC == 0 else BC/AC
                 gps_speed_next_meters_second = 0 if time_diff == 0.0 else distance/time_diff 
+                gps_speed_next_kmeters_second = gps_speed_next_meters_second #in kms
                 gps_azimuth_next_degrees = azimuth1
                 gps_pitch_next_degrees = 0 if distance == 0.0 else (end_altitude - start_altitude) / distance
                 gps_distance_next_meters = distance
@@ -783,6 +788,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 gps_velocity_north_next_meters_second = 0
                 gps_velocity_up_next_meters_second = 0
                 gps_speed_next_meters_second = 0
+                gps_speed_next_kmeters_second = gps_speed_next_meters_second #in kms
                 gps_azimuth_next_degrees = 0
                 gps_pitch_next_degrees = 0
                 gps_distance_next_meters = 0
@@ -825,7 +831,13 @@ class TrekViewGoProMp4(TrekviewHelpers):
             gpxFileName = self.__config["imageFolder"] + "_photos.gpx"
             gpxFileName = self.__saveXmlMetaFile(gpxFileName, gpxData)
 
-            cmdMetaData = []
+            cmdMetaData = [
+                '-GPSSpeed': gps_speed_next_kmeters_second,
+                '-GPSSpeedRef': 'k',
+                '-GPSImgDirection': gps_azimuth_next_degrees,
+                '-GPSImgDirectionRef': 'm',
+                '-IFD0:Model="{}"'.format(self.removeEntities(data["video_field_data"]["DeviceName"]))
+            ]
             if data["video_field_data"]["ProjectionType"] == "equirectangular":
                 cmdMetaData.append('-XMP-GPano:StitchingSoftware="{}"'.format(self.removeEntities(data["video_field_data"]["StitchingSoftware"])))
                 cmdMetaData.append('-XMP-GPano:SourcePhotosCount="{}"'.format(2))
