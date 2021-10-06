@@ -36,13 +36,13 @@ class TrekviewHelpers():
         #print("\nalt: {} {} \n".format(alt, altitude.split(" ")[0]))
         return alt
 
-    def __subprocess(self, command, sh=0):
+    def __subprocess(self, command, sh=0, capture_output=True):
         ret = None
         try:
             cmd = command
             if sh == 0:
                 cmd = shlex.split(" ".join(cmd))
-            output = subprocess.run(cmd, capture_output=True)
+            output = subprocess.run(cmd, capture_output=capture_output)
             logging.info(output)
             if output.returncode == 0:
                 out = output.stdout.decode('utf-8',"ignore")
@@ -92,10 +92,11 @@ class TrekviewHelpers():
         ffmpeg = self.ffmpeg
         command.insert(0, ffmpeg)
         ret = self.__subprocess(command, sh)
+        
         if ret["error"] is not None:
             logging.critical(ret["error"])
             exit("Error occured while executing ffmpeg, please see logs for more info.")
-        return ret
+        return True
 
     def _checkFileExists(self, filename):
         try:
@@ -123,7 +124,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
             videoData = self.__extractVideoInformationPre(args.input, "Track3")
         else:
             videoData = self.__extractVideoInformationPre(args.input, "Track2")
-
+        
         fileType = self.__validateVideo(videoData["video_field_data"])
         if fileType == "360":
             self.__config["fileType"] = '360'
@@ -211,7 +212,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
             exit("The following file {} is too large. The maximum size for a single video is 5GB".format(self.__config["args"].input))
         
         #Validate Critical Errors
-        
+        #print(videoData)
         if videoData['MetaFormat'].strip()  != 'gpmd':
             metaFormat = False
             logging.critical("Your video has no telemetry. You need to enable GPS on your GoPro to ensure GPS location is captured.")
@@ -219,6 +220,10 @@ class TrekViewGoProMp4(TrekviewHelpers):
         else:
             metaFormat = True
         
+        if "ProjectionType" not in videoData:
+            logging.critical("This does not appear to be a GoPro 360 video. Only mp4 videos with a 360 equirectangular projection are accepted. Please make sure you are uploading 360 mp4 videos from your camera.")
+            exit("This does not appear to be a GoPro 360 video. Only mp4 videos with a 360 equirectangular projection are accepted. Please make sure you are uploading 360 mp4 videos from your camera.")
+
         if videoData["ProjectionType"].strip()  != 'equirectangular':
             if metaFormat is False:
                 logging.critical("This does not appear to be a GoPro 360 video. Only mp4 videos with a 360 equirectangular projection are accepted. Please make sure you are uploading 360 mp4 videos from your camera.")
@@ -374,8 +379,15 @@ class TrekViewGoProMp4(TrekviewHelpers):
                             adata[tag.strip()] = elem.text.strip()
                 allGps.append({tag: elem.text})
             else:
-                if tag in videoInfoFields:
-                    videoFieldData[tag] = elem.text
+                if tag.strip() in videoInfoFields:
+                    if tag.strip() == 'MetaFormat':
+                        if elem.text.strip() == 'gpmd':
+                            videoFieldData[tag.strip()] = elem.text.strip()
+                        else:
+                            if 'MetaFormat' in videoFieldData and videoFieldData[tag.strip()] != 'gpmd':
+                                videoFieldData[tag.strip()] = ''
+                    else:
+                        videoFieldData[tag.strip()] = elem.text.strip()
         #self.__getAllGpsAlongTimeData(gpsData)
         return {
             "allGps": allGps,
@@ -429,7 +441,6 @@ class TrekViewGoProMp4(TrekviewHelpers):
         gps_speed_accuracy_meters = '0.1'
         for point in data:
             _current = data[i] 
-            print('#', _current["GPSLatitude"], _current["GPSLongitude"])
             a = self.latLngToDecimal(_current["GPSLatitude"])
             b = self.latLngToDecimal(_current["GPSLongitude"])
             alt = _current["GPSAltitude"].split(" ")[0]
@@ -608,6 +619,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
             if check == dlen:
                 gpsData.append(data.copy())
                 break
+            break
         timesBetween = []
         dlen = len(gpsData)
         tw = self.__config["time_warp"]
@@ -625,6 +637,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
                     diff = int(((end - start).total_seconds()/float(len(dlist[1])))*1000.0)
                     #check this later
                     if diff == 0:
+                        print('!!', start, end)
                         """zend = end
                         for tbet in timesBetween:
                             if tbet >= end:
@@ -644,8 +657,9 @@ class TrekViewGoProMp4(TrekviewHelpers):
                         pData.append(dlist[1][ii].copy())
                         ii = ii+1
                 else:
+                    end = start+datetime.timedelta(0, 1.0) 
                     diff = int((0.05)*1000.0)
-                    new = pd.date_range(start=start, periods=len(dlist[1]), closed='left', freq="{}ms".format(diff))
+                    new = pd.date_range(start=start, end=end, closed='left', freq="{}ms".format(diff))
                     ii = 0 
                     for n in dlist[1]:
                         dlist[1][ii]['GPSDateTime'] = new[ii]
@@ -658,7 +672,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
             timestamps = self.__getImageSequenceTimestamps(start, images, gpsFields, pData)
             #timestamps.to_csv('./01.csv', sep=',', encoding='utf-8', index=False)
         else:
-            timestamps = self.getTimewrapTimestamps(gpsData, images)
+            timestamps = self.getTimewrapTimestamps(gpsData, images, videoFieldData)
         data = {
             "video_field_data": videoFieldData,
             "timestamps": timestamps,
@@ -666,7 +680,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
         }
         return data
 
-    def getTimewrapTimestamps(self, gpsData, images):
+    def getTimewrapTimestamps(self, gpsData, images, videoFieldData):
         dlen = len(gpsData)
         if dlen < 1:
             return pd.DataFrame([])
@@ -696,6 +710,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
             for tdt in timeData:
                 if tdt["GPSDateTime"] == z:
                     tData.append(tdt.copy())
+        self.__createAllGpsGpx(tData, videoFieldData)
         return pd.DataFrame(tData)
     
     def __geotagImages(self, data):
@@ -713,6 +728,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 '-SubSecTimeOriginal="{0}"'.format(self.removeEntities(tt[1])),
                 '-SubSecDateTimeOriginal="{0}Z"'.format(self.removeEntities(".".join(tt)))
             ]
+            cmdMetaData.append('-overwrite_original')
             cmdMetaData.append("{}{}{}".format(self.__config["imageFolderPath"], os.sep, img["image"]))
             output = self._exiftool(cmdMetaData)
             i = i+1
