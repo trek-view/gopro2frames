@@ -19,6 +19,10 @@ class TrekviewHelpers():
         text = re.sub("'", '', html.unescape(text))
         return html.escape(text)
 
+    def latLngDecimalToDecimal(self, latLng):
+        ll = latLng.split(" ")
+        return float(ll[0]) * (-1 if ll[1].strip() in ['W', 'S'] else 1)
+
     def latLngToDecimal(self, latLng):
         deg, minutes, seconds, direction = re.split('[deg\'"]+', latLng)
         return (float(deg.strip()) + float(minutes.strip())/60 + float(seconds.strip())/(60*60)) * (-1 if direction.strip() in ['W', 'S'] else 1)
@@ -64,6 +68,8 @@ class TrekviewHelpers():
             exiftool = "exiftool.exe"
         else:
             exiftool = "exiftool"
+        command.insert(0, "-config")
+        command.insert(1, ".ExifTool_config")
         command.insert(0, exiftool)
         ret = self.__subprocess(command, sh)
         if ret["error"] is not None:
@@ -390,8 +396,6 @@ class TrekViewGoProMp4(TrekviewHelpers):
 
         exit()
 
-
-
     def __getImageSequenceTimestamps(self, start, images, gpsFields, timeData):
         periods = len(images)
         timesBetween = [tdata["GPSDateTime"] for tdata in timeData ]
@@ -425,6 +429,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
         gps_speed_accuracy_meters = '0.1'
         for point in data:
             _current = data[i] 
+            print('#', _current["GPSLatitude"], _current["GPSLongitude"])
             a = self.latLngToDecimal(_current["GPSLatitude"])
             b = self.latLngToDecimal(_current["GPSLongitude"])
             alt = _current["GPSAltitude"].split(" ")[0]
@@ -825,17 +830,13 @@ class TrekViewGoProMp4(TrekviewHelpers):
                     <{str(k)}>{str(v)}</{str(k)}>
                 """)
                 gpx_point.extensions.append(gpx_extension)
-            
-            gpxData = gpx.to_xml()
-
-            gpxFileName = self.__config["imageFolder"] + "_photos.gpx"
-            gpxFileName = self.__saveXmlMetaFile(gpxFileName, gpxData)
 
             cmdMetaData = [
-                '-GPSSpeed': gps_speed_next_kmeters_second,
-                '-GPSSpeedRef': 'k',
-                '-GPSImgDirection': gps_azimuth_next_degrees,
-                '-GPSImgDirectionRef': 'm',
+                '-GPSSpeed={}'.format(gps_speed_next_kmeters_second),
+                '-GPSSpeedRef=k',
+                '-GPSImgDirection={}'.format(gps_azimuth_next_degrees),
+                '-GPSImgDirectionRef=m',
+                '-GPSPitch={}'.format(gps_pitch_next_degrees),
                 '-IFD0:Model="{}"'.format(self.removeEntities(data["video_field_data"]["DeviceName"]))
             ]
             if data["video_field_data"]["ProjectionType"] == "equirectangular":
@@ -850,9 +851,13 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 cmdMetaData.append('-XMP-GPano:CroppedAreaLeftPixels="{}"'.format(0))
                 cmdMetaData.append('-XMP-GPano:CroppedAreaTopPixels="{}"'.format(0))
             cmdMetaData.append('-overwrite_original')
-            cmdMetaData.append("{}{}{}".format(self.__config["imageFolderPath"], os.sep, photo[1]))
+            cmdMetaData.append("{}{}{}".format(self.__config["imageFolderPath"], os.sep, photo[0]))
             output = self._exiftool(cmdMetaData)
             counter = counter + 1
+        gpxData = gpx.to_xml()
+
+        gpxFileName = self.__config["imageFolder"] + "_photos.gpx"
+        gpxFileName = self.__saveXmlMetaFile(gpxFileName, gpxData)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
