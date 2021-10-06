@@ -91,11 +91,11 @@ class TrekviewHelpers():
     def _ffmpeg(self, command, sh=0):
         ffmpeg = self.ffmpeg
         command.insert(0, ffmpeg)
-        ret = self.__subprocess(command, sh)
+        ret = self.__subprocess(command, sh, False)
         
-        if ret["error"] is not None:
+        """if ret["error"] is not None:
             logging.critical(ret["error"])
-            exit("Error occured while executing ffmpeg, please see logs for more info.")
+            exit("Error occured while executing ffmpeg, please see logs for more info.")"""
         return True
 
     def _checkFileExists(self, filename):
@@ -121,10 +121,17 @@ class TrekViewGoProMp4(TrekviewHelpers):
         self.__createDirectories()
 
         if self.__config["time_warp"] is None:
+            ms = float(((100.0/float(self.__config["frame_rate"]))/100.0))
             videoData = self.__extractVideoInformationPre(args.input, "Track3")
         else:
+            tw = self.__config["time_warp"]
+            fr = self.__config["frame_rate"]
+            tw = int(tw.replace('x', ''))
+            if fr < 1:
+                fr = 5
+            tw = float(tw)/float(fr)
+            ms = float(tw)
             videoData = self.__extractVideoInformationPre(args.input, "Track2")
-
         fileType = self.__validateVideo(videoData["video_field_data"])
         if fileType == "360":
             self.__config["fileType"] = '360'
@@ -133,12 +140,27 @@ class TrekViewGoProMp4(TrekviewHelpers):
             self.__breakIntoFrames(filename)
         else:
             self.__breakIntoFrames(self.__config["args"].input)
-        
-        videoData = self.__extractVideoInformation(videoData)
-
-        self.__geotagImages(videoData)
-
-        self.__updateImagesMetadata(videoData)
+        videoData['images'] = fnmatch.filter(os.listdir(self.__config["imageFolderPath"]), '*.jpg')
+        startTime = videoData['startTime']
+        icounter = 0
+        if len(videoData['images']) > 0:
+            for img in videoData['images']:
+                GPSDateTime = datetime.datetime.strftime(startTime, "%Y:%m:%d %H:%M:%S.%f")
+                tt = GPSDateTime.split(".")
+                cmdMetaData = [
+                    '-DateTimeOriginal="{0}Z"'.format(GPSDateTime),
+                    '-SubSecTimeOriginal="{0}"'.format(tt[1]),
+                    '-SubSecDateTimeOriginal="{0}Z"'.format(".".join(tt))
+                ]
+                cmdMetaData.append('-overwrite_original')
+                cmdMetaData.append("{}{}{}".format(self.__config["imageFolderPath"], os.sep, videoData['images'][icounter]))
+                output = self._exiftool(cmdMetaData)
+                startTime = startTime+datetime.timedelta(0, ms) 
+                icounter = icounter + 1
+            cmd = ["-geotag", self.__config["imageFolderPath"]+os.sep+self.__config["imageFolder"] + "_video.gpx", "'-geotime<${subsecdatetimeoriginal}'", '-overwrite_original', self.__config["imageFolderPath"]]
+            output = self._exiftool(cmd)
+            self.__updateImagesMetadata(videoData)
+            
 
     def __setLogging(self):
         args = self.__config["args"]
@@ -229,7 +251,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
         if videoData['DeviceName'].strip() not in devices:
             logging.critical("This file does not look like it was captured using a GoPro camera. Only content taken using a GoPro 360 Camera are currently supported.")
             exit("This file does not look like it was captured using a GoPro camera. Only content taken using a GoPro 360 Camera are currently supported.")
-
+        
         if self.__config["frame_rate"] > 5:
             logging.warning("It appears the frame rate of this video is very low. You can continue, but the images in the Sequence might not render as expected.")
             print("It appears the frame rate of this video is very low. You can continue, but the images in the Sequence might not render as expected.")
@@ -247,12 +269,11 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 if videoData["CompressorName"] == "H.265":
                     logging.critical("This does not appear to be a GoPro .360 file. Please use the .360 video created from your GoPro camera only.")
                     exit("This does not appear to be a GoPro .360 file. Please use the .360 video created from your GoPro camera only.")
-        #if videoData["FileType"].strip() == '360':
-        StitchingSoftwares = ["Fusion Studio / GStreamer", "Spherical Metadata Tool"]
-        if videoData['StitchingSoftware'].strip() not in StitchingSoftwares:
-            logging.critical("Only mp4's stitched using GoPro software are supported. Please use GoPro software to stitch your GoPro 360 videos.")
-            exit("Only mp4's stitched using GoPro software are supported. Please use GoPro software to stitch your GoPro 360 videos.")
-
+        if videoData["FileType"].strip() == '360':
+            StitchingSoftwares = ["Fusion Studio / GStreamer", "Spherical Metadata Tool"]
+            if videoData['StitchingSoftware'].strip() not in StitchingSoftwares:
+                logging.critical("Only mp4's stitched using GoPro software are supported. Please use GoPro software to stitch your GoPro 360 videos.")
+                exit("Only mp4's stitched using GoPro software are supported. Please use GoPro software to stitch your GoPro 360 videos.")
         return videoData["FileType"].strip()
     
     def __convert360tomp4(self):
@@ -340,137 +361,83 @@ class TrekViewGoProMp4(TrekviewHelpers):
         return self.__saveXmlMetaFile(self.__config["imageFolder"]+".xml", output)
     
     def __getXMLData(self, root, videoInfoFields, gpsFields, Track):
-        gpsData = {}
+        gpsData = []
         videoFieldData = {}
         videoFieldData['ProjectionType'] = ''
         videoFieldData['StitchingSoftware'] = ''
-        allGps = []
-        check = 0
+        videoFieldData['MetaFormat'] = ''
         nsmap = root[0].nsmap
         anchor = ''
         data = {}
+        ldata = {}
         adata = {}
         for elem in root[0]:
             eltags = elem.tag.split("}")
             nm = eltags[0].replace("{", "")
-            tag = eltags[-1]
+            tag = eltags[-1].strip()
+            if tag in videoInfoFields:
+                if tag == 'MetaFormat':
+                    if elem.text.strip() == 'gpmd':
+                        for k, v in nsmap.items():
+                            if v == nm:
+                                Track = k
+                                break
+                        videoFieldData[tag.strip()] = elem.text.strip()
+                elif tag == 'ProjectionType':
+                    if elem.text.strip() == 'equirectangular':
+                        videoFieldData[tag] = elem.text.strip()
+                else:
+                    videoFieldData[tag.strip()] = elem.text.strip()
+        for elem in root[0]:
+            eltags = elem.tag.split("}")
+            nm = eltags[0].replace("{", "")
+            tag = eltags[-1].strip()
             if (tag in gpsFields) and (nm == nsmap[Track]):
+                if tag.strip() in ['GPSHPositioningError', 'GPSMeasureMode']:
+                    adata[tag] = elem.text.strip()
                 if tag == 'GPSDateTime':
-                    anchor = str(elem.text.strip())
-                    gpsData[anchor] = {
-                        'GPSData': []
-                    }
-                    if len(adata) > 0:
+                    if anchor != '': 
                         for k, v in adata.items():
-                            gpsData[anchor][k] = v
-                        adata = {}
+                            data[k] = v
+                        gpsData.append(data)
+                        anchor = str(elem.text.strip())
+                        data = {
+                            'GPSData': [],
+                            'GPSHPositioningError': '',
+                            'GPSMeasureMode': '',
+                            'GPSDateTime': anchor
+                        }
+                    else:
+                        anchor = str(elem.text.strip())
+                        data = {
+                            'GPSData': [],
+                            'GPSHPositioningError': '',
+                            'GPSMeasureMode': '',
+                            'GPSDateTime': anchor
+                        }
+                        for k, v in adata.items():
+                            data[k] = v
                 else:
                     if tag.strip() in ['GPSLatitude', 'GPSLongitude', 'GPSAltitude']:
-                        if (len(data) <= 3):
-                            data[tag.strip()] = elem.text.strip()
-                            if len(data) == 3:
-                                gpsData[anchor]['GPSData'].append(data)
-                                data = {}
-                    else:
-                        if anchor != '':
-                            gpsData[anchor][tag.strip()] = elem.text.strip()
-                        else:
-                            adata[tag.strip()] = elem.text.strip()
-                allGps.append({tag: elem.text})
-            else:
-                if tag.strip() in videoInfoFields:
-                    if tag.strip() == 'MetaFormat':
-                        if elem.text.strip() == 'gpmd':
-                            videoFieldData[tag.strip()] = elem.text.strip()
-                        else:
-                            if 'MetaFormat' in videoFieldData and videoFieldData[tag.strip()] != 'gpmd':
-                                videoFieldData[tag.strip()] = ''
-                    else:
-                        videoFieldData[tag.strip()] = elem.text.strip()
-        #self.__getAllGpsAlongTimeData(gpsData)
-        if len(allGps) < 1:
-            Track = "Track4"
-            gpsData = {}
-            videoFieldData = {}
-            videoFieldData['ProjectionType'] = ''
-            videoFieldData['StitchingSoftware'] = ''
-            allGps = []
-            check = 0
-            nsmap = root[0].nsmap
-            anchor = ''
-            data = {}
-            adata = {}
-            for elem in root[0]:
-                eltags = elem.tag.split("}")
-                nm = eltags[0].replace("{", "")
-                tag = eltags[-1]
-                if (tag in gpsFields) and (nm == nsmap[Track]):
-                    if tag == 'GPSDateTime':
-                        anchor = str(elem.text.strip())
-                        gpsData[anchor] = {
-                            'GPSData': []
-                        }
-                        if len(adata) > 0:
-                            for k, v in adata.items():
-                                gpsData[anchor][k] = v
-                            adata = {}
-                    else:
-                        if tag.strip() in ['GPSLatitude', 'GPSLongitude', 'GPSAltitude']:
-                            if (len(data) <= 3):
-                                data[tag.strip()] = elem.text.strip()
-                                if len(data) == 3:
-                                    gpsData[anchor]['GPSData'].append(data)
-                                    data = {}
-                        else:
-                            if anchor != '':
-                                gpsData[anchor][tag.strip()] = elem.text.strip()
-                            else:
-                                adata[tag.strip()] = elem.text.strip()
-                    allGps.append({tag: elem.text})
-                else:
-                    if tag.strip() in videoInfoFields:
-                        if tag.strip() == 'MetaFormat':
-                            if elem.text.strip() == 'gpmd':
-                                videoFieldData[tag.strip()] = elem.text.strip()
-                            else:
-                                if 'MetaFormat' in videoFieldData and videoFieldData[tag.strip()] != 'gpmd':
-                                    videoFieldData[tag.strip()] = ''
-                        else:
-                            videoFieldData[tag.strip()] = elem.text.strip()
+                        if (len(ldata) <= 3):
+                            ldata[tag] = elem.text.strip()
+                            if len(ldata) == 3:
+                                data['GPSData'].append(ldata)
+                                ldata = {}
+        for k, v in adata.items():
+            data[k] = v
+        gpsData.append(data)
+        """for gps in gpsData:
+            print(gps['GPSDateTime'], len(gps['GPSData']))
+        exit()"""
+        output = self.__gpsTimestamps(gpsData)
         return {
-            "allGps": allGps,
+            "filename": output["filename"],
+            "startTime": output["startTime"],
             "video_field_data": videoFieldData
         }
 
-    def __getAllGpsAlongTimeData(self, gpsData):
-        glen = len(gpsData)
-        args = [iter(list(gpsData.keys()))] * 2
-        times = itertools.zip_longest(fillvalue=None, *args)
-        for t in times:
-            if t[1] is None:
-                """"""
-            else:
-                start_time = datetime.datetime.strptime(t[0], "%Y:%m:%d %H:%M:%S.%f")
-                end_time = datetime.datetime.strptime(t[1], "%Y:%m:%d %H:%M:%S.%f")
-
-
-        exit()
-
-    def __getImageSequenceTimestamps(self, start, images, gpsFields, timeData):
-        periods = len(images)
-        timesBetween = [tdata["GPSDateTime"] for tdata in timeData ]
-        ms = int(((100.0/float(self.__config["frame_rate"]))/100.0)*1000.0)
-        timestamps = pd.date_range(start=start, periods=periods, closed=None, freq="{}ms".format(ms))
-        tData = []
-        for t in timestamps:
-            z = min(timesBetween, key=lambda x: abs(x - t))
-            for tdata in timeData:
-                if tdata["GPSDateTime"] == z:
-                    tdata["GPSDateTime"] = t
-                    tData.append(tdata.copy())
-        return pd.DataFrame(tData)
-    
-    def __createAllGpsGpx(self, data, videoFieldData):
+    def __gpsTimestamps(self, gpsData):
         gpx = gpxpy.gpx.GPX()
 
         # Create first track in our GPX:
@@ -480,61 +447,125 @@ class TrekViewGoProMp4(TrekviewHelpers):
         # Create first segment in our GPX track:
         gpx_segment = gpxpy.gpx.GPXTrackSegment()
         gpx_track.segments.append(gpx_segment)
-        
-        i = 0
-        dlen = len(data) 
-        dist = 0
-        time_diff = 0
-        azimuth1 = 0
-        gps_speed_accuracy_meters = '0.1'
-        for point in data:
-            _current = data[i] 
-            a = self.latLngToDecimal(_current["GPSLatitude"])
-            b = self.latLngToDecimal(_current["GPSLongitude"])
-            alt = _current["GPSAltitude"].split(" ")[0]
-            t = _current["GPSDateTime"]
-            t_start = _current["GPSDateTime"]
-            d_start = (self.latLngToDecimal(_current["GPSLatitude"]), self.latLngToDecimal(_current["GPSLongitude"]))
-            if i < dlen-1:
-                _next = data[i+1]
-                t_end = _next["GPSDateTime"]
-                time_diff = (t_end - t_start).total_seconds()
-                d_end = (self.latLngToDecimal(_next["GPSLatitude"]), self.latLngToDecimal(_next["GPSLongitude"]))   
-                altitude = self.getAltitudeFloat(_current["GPSAltitude"])
-                altitude_next = self.getAltitudeFloat(_next["GPSAltitude"])
-                dist = haversine(d_start, d_end, Unit.METERS)
-                brng = Geodesic.WGS84.Inverse(d_start[0], d_start[1], d_end[0], d_end[1])
+        Timestamps = []
+        counter = 0
+        gLen = len(gpsData)
+        for gps in gpsData:
+            if counter < gLen-1:
+                start_gps = gpsData[counter]
+                end_gps = gpsData[counter + 1]
+
+                #Get Times from metadata
+                start_time = datetime.datetime.strptime(start_gps["GPSDateTime"].replace("Z", ""), "%Y:%m:%d %H:%M:%S.%f")
+                end_time = datetime.datetime.strptime(end_gps["GPSDateTime"].replace("Z", ""), "%Y:%m:%d %H:%M:%S.%f")
+                time_diff = (end_time - start_time).total_seconds()
+                diff = int((time_diff/float(len(start_gps["GPSData"])))*1000.0)
+                #check this later
+                if diff == 0:
+                    if start_time == end_time:
+                        start_time = end_time
+                        diff = int((0.05)*1000.0)
+                        end_time = end_time+datetime.timedelta(0, 0.05) 
+                new = pd.date_range(start=start_time, end=end_time, closed='left', freq="{}ms".format(diff))
+                icounter = 0
+                dlLen = 1 if len(start_gps["GPSData"]) < 1 else len(start_gps["GPSData"])
+                nlLen = 1 if len(new) < 1 else len(new)
+                _ms = math.floor(dlLen/nlLen)
+                _ms = 1 if _ms < 1 else _ms
+                for gps in start_gps["GPSData"]:
+                    tBlock = gps.copy()
+                    tBlock["GPSDateTime"] = new[icounter]
+                    tBlock["GPSMeasureMode"] = start_gps["GPSMeasureMode"]
+                    tBlock["GPSHPositioningError"] = start_gps["GPSHPositioningError"]
+                    Timestamps.append(tBlock)
+                    icounter = icounter + _ms
+            else:
+                start_gps = gpsData[counter]
+
+                #Get Times from metadata
+                start_time = datetime.datetime.strptime(start_gps["GPSDateTime"].replace("Z", ""), "%Y:%m:%d %H:%M:%S.%f")
+                end_time = start_time+datetime.timedelta(0, 1.0) 
+                diff = int((time_diff/float(len(start_gps["GPSData"])))*1000.0)
+                new = pd.date_range(start=start_time, end=end_time, closed='left', freq="{}ms".format(diff))
+                icounter = 0
+                dlLen = 1 if len(start_gps["GPSData"]) < 1 else len(start_gps["GPSData"])
+                nlLen = 1 if len(new) < 1 else len(new)
+                _ms = math.floor(dlLen/nlLen)
+                _ms = 1 if _ms < 1 else _ms
+                for gps in start_gps["GPSData"]:
+                    tBlock = gps.copy()
+                    tBlock["GPSDateTime"] = new[icounter]
+                    tBlock["GPSMeasureMode"] = start_gps["GPSMeasureMode"]
+                    tBlock["GPSHPositioningError"] = start_gps["GPSHPositioningError"]
+                    Timestamps.append(tBlock)
+                    icounter = icounter + _ms
+            counter = counter + 1
+        icounter = 0
+        tlen = len(Timestamps)
+        t1970 = datetime.datetime.strptime("1970:01:01 00:00:00.000000", "%Y:%m:%d %H:%M:%S.%f")
+        for gps in Timestamps:
+            gps_speed_accuracy_meters = '0.1'
+            gps_fix_type = gps["GPSMeasureMode"]
+            gps_vertical_accuracy_meters = gps["GPSHPositioningError"]
+            gps_horizontal_accuracy_meters = gps["GPSHPositioningError"]
+            if icounter < tlen-1:
+                start_time = gps["GPSDateTime"]
+                gps_epoch_seconds = (start_time-t1970).total_seconds()
+
+                #Get Times from metadata
+                start_time = Timestamps[icounter]["GPSDateTime"]
+                end_time = Timestamps[icounter]["GPSDateTime"]
+                time_diff = (end_time - start_time).total_seconds()
+
+                #Get Latitude, Longitude and Altitude
+                start_latitude = self.latLngToDecimal(gps["GPSLatitude"])
+                start_longitude = self.latLngToDecimal(gps["GPSLongitude"])
+                start_altitude = self.getAltitudeFloat(gps["GPSAltitude"])
+
+                end_latitude = self.latLngToDecimal(Timestamps[icounter+1]["GPSLatitude"])
+                end_longitude = self.latLngToDecimal(Timestamps[icounter+1]["GPSLongitude"])
+                end_altitude = self.getAltitudeFloat(Timestamps[icounter+1]["GPSAltitude"])
+
+                gpx_point = gpxpy.gpx.GPXTrackPoint(
+                    latitude=start_latitude, 
+                    longitude=start_longitude, 
+                    time=start_time, 
+                    elevation=start_altitude
+                )
+                gpx_segment.points.append(gpx_point)
+
+                #Find Haversine Distance
+                distance = haversine((start_latitude, start_longitude), (end_latitude, end_longitude), Unit.METERS)
+
+                #Find Bearing
+                brng = Geodesic.WGS84.Inverse(start_latitude, start_longitude, end_latitude, end_longitude)
                 azimuth1 = math.radians(brng['azi1'])
                 azimuth2 = math.radians(brng['azi2'])
-                AC = (math.cos(math.radians(azimuth1))*dist)
-                BC = (math.sin(math.radians(azimuth2))*dist)
+
+                #Create Metada Fields
+                AC = (math.cos(math.radians(azimuth1))*distance)
+                BC = (math.sin(math.radians(azimuth2))*distance)
                 gps_velocity_east_next_meters_second = 0 if time_diff == 0.0 else AC/time_diff  
                 gps_velocity_north_next_meters_second = 0 if time_diff == 0.0 else BC/time_diff
                 gps_velocity_up_next_meters_second = 0 if AC == 0 else BC/AC
-                gps_speed_next_meters_second = 0 if time_diff == 0.0 else dist/time_diff 
+                gps_speed_next_meters_second = 0 if time_diff == 0.0 else distance/time_diff 
+                gps_speed_next_kmeters_second = gps_speed_next_meters_second*1000.0 #in kms
                 gps_azimuth_next_degrees = azimuth1%360
-                pitch_default = -90 if (altitude_next - altitude) < 0 else 90
-                gps_pitch_next_degrees = pitch_default if dist == 0.0 else ((altitude_next - altitude) / dist)
-                gps_distance_next_meters = dist
+                pitch_default = -90 if (end_altitude - start_altitude) < 0 else 90
+                gps_pitch_next_degrees = pitch_default if distance == 0.0 else (end_altitude - start_altitude) / distance
+                gps_distance_next_meters = distance
                 gps_time_next_seconds = time_diff
             else:
+                #Get metadata from exiftool
                 gps_velocity_east_next_meters_second = 0
                 gps_velocity_north_next_meters_second = 0
                 gps_velocity_up_next_meters_second = 0
                 gps_speed_next_meters_second = 0
+                gps_speed_next_kmeters_second = 0
                 gps_azimuth_next_degrees = 0
                 gps_pitch_next_degrees = 0
                 gps_distance_next_meters = 0
                 gps_time_next_seconds = 0
-            gps_fix_type = point["GPSMeasureMode"]
-            gps_vertical_accuracy_meters = point["GPSHPositioningError"]
-            gps_horizontal_accuracy_meters = point["GPSHPositioningError"]
-
-            t = _current["GPSDateTime"]
-            t1970 = datetime.datetime.strptime("1970:01:01 00:00:00.000000", "%Y:%m:%d %H:%M:%S.%f")
-            gps_epoch_seconds = (t-t1970).total_seconds()
-            gpx_point = gpxpy.gpx.GPXTrackPoint(latitude=a, longitude=b, time=t, elevation=alt)
-            gpx_segment.points.append(gpx_point)
             ext = {
                 "gps_epoch_seconds": gps_epoch_seconds,
                 "gps_fix_type": gps_fix_type,
@@ -556,12 +587,13 @@ class TrekViewGoProMp4(TrekviewHelpers):
                     <{str(k)}>{str(v)}</{str(k)}>
                 """)
                 gpx_point.extensions.append(gpx_extension)
-            
-            i = i+1
-
+            icounter = icounter + 1
         gpxData = gpx.to_xml() 
-
-        return self.__saveXmlMetaFile(self.__config["imageFolder"] + "_video.gpx", gpxData)
+        filename = self.__saveXmlMetaFile(self.__config["imageFolder"] + "_video.gpx", gpxData)
+        return {
+            "filename": filename,
+            "startTime": Timestamps[0]['GPSDateTime']
+        }
 
     def __extractVideoInformationPre(self, videoFile, Track):
         logging.info("Running exiftool to extract metadata...")
@@ -591,7 +623,6 @@ class TrekViewGoProMp4(TrekviewHelpers):
             'FileType',
             'FileTypeExtension',
             'CompressorName'
-
         ] 
         gpsFields = [
             'GPSDateTime', 
@@ -603,193 +634,6 @@ class TrekViewGoProMp4(TrekviewHelpers):
         ]
         _xmlData = self.__getXMLData(root, videoInfoFields, gpsFields, Track)
         return _xmlData
-
-    def __extractVideoInformation(self, videoFieldData):
-        logging.info("Running exiftool to extract metadata...")
-        print("Running exiftool to extract metadata...")
-        videoInfoFields = [
-            'DeviceName', 
-            'ProjectionType', 
-            'MetaFormat',
-            'StitchingSoftware',
-            'VideoFrameRate',
-            'SourceImageHeight',
-            'SourceImageWidth',
-            'FileSize',
-            'FileType',
-            'FileTypeExtension',
-            'CompressorName'
-        ] 
-        gpsFields = [
-            'GPSDateTime', 
-            'GPSLatitude', 
-            'GPSLongitude', 
-            'GPSAltitude',
-            'GPSHPositioningError',
-            'GPSMeasureMode'
-        ]
-        images = fnmatch.filter(os.listdir(self.__config["imageFolderPath"]), '*.jpg')
-        allGps = videoFieldData["allGps"]
-        videoFieldData = videoFieldData["video_field_data"]
-        timestamps = []
-        gpsData = []
-        pData = []
-        dateTime = ''
-        data = {}
-        dataSub = {}
-        check = 0
-        checkSub = 0
-        dlen = len(allGps)
-        
-        while check < dlen:
-            dtlist = list(allGps[check].items())
-            dtlist = dtlist[0]
-            if dtlist[0] == "GPSDateTime":
-                if len(data) > 0:
-                    gpsData.append(data.copy())
-                    data = {}
-                dateTime = dtlist[1]
-                timestamps.append(dateTime)
-                data[dateTime] = []
-                check = check + 1
-            else:
-                j = 0
-                while j < 4:
-                    dlist = list(allGps[check].items())
-                    dlist = dlist[0]
-                    if dlist[0] == "GPSDateTime":
-                        break
-                    dataSub[dlist[0]] = dlist[1]
-                    check = check + 1
-                    j = j + 1
-                if dateTime != '':
-                    data[dateTime].append(dataSub.copy())
-            if check == dlen:
-                gpsData.append(data.copy())
-                break
-        timesBetween = []
-        dlen = len(gpsData)
-        tw = self.__config["time_warp"]
-        if tw is None:
-            diff = int(((100.0/float(self.__config["frame_rate"]))/100.0)*100.0)
-            for i in range(0, dlen):
-                dlist = list(gpsData[i].items())
-                dlist = dlist[0]
-                if i < dlen-1:
-                    delist = list(gpsData[i+1].items())
-                    delist = delist[0]
-                    start = datetime.datetime.strptime(dlist[0], "%Y:%m:%d %H:%M:%S.%f")
-                    timesBetween.append(start)
-                    end = datetime.datetime.strptime(delist[0], "%Y:%m:%d %H:%M:%S.%f")
-                    diff = int(((end - start).total_seconds()/float(len(dlist[1])))*1000.0)
-                    #check this later
-                    if diff == 0:
-                        #print('!!', start, end)
-                        """zend = end
-                        for tbet in timesBetween:
-                            if tbet >= end:
-                                diff = int(((end - start).total_seconds()/float(len(dlist[1])))*1000.0)
-                                break
-                            start = tbet
-                        print('##', start, end)"""
-                        if start == end:
-                            start = end
-                            diff = int((0.05)*1000.0)
-                            end = end+datetime.timedelta(0, 0.05) 
-                    #print(diff, end, start, len(dlist[1]))
-                    new = pd.date_range(start=start, end=end, closed='left', freq="{}ms".format(diff))
-                    ii = 0 
-                    dlLen = 1 if len(dlist[1]) < 1 else len(dlist[1])
-                    nlLen = 1 if len(new) < 1 else len(new)
-                    _ms = math.floor(dlLen/nlLen)
-                    _ms = 1 if _ms < 1 else _ms
-                    for n in dlist[1]:
-                        dlist[1][ii]['GPSDateTime'] = new[ii]
-                        pData.append(dlist[1][ii].copy())
-                        ii = ii+_ms
-                else:
-                    end = start+datetime.timedelta(0, 1.0) 
-                    diff = int((0.05)*1000.0)
-                    new = pd.date_range(start=start, end=end, closed='left', freq="{}ms".format(diff))
-                    ii = 0 
-                    dlLen = 1 if len(dlist[1]) < 1 else len(dlist[1])
-                    nlLen = 1 if len(new) < 1 else len(new)
-                    _ms = math.floor(dlLen/nlLen)
-                    _ms = 1 if _ms < 1 else _ms
-                    for n in dlist[1]:
-                        dlist[1][ii]['GPSDateTime'] = new[ii]
-                        pData.append(dlist[1][ii].copy())
-                        ii = ii+_ms
-                i = i+1
-            self.__createAllGpsGpx(pData, videoFieldData)
-            timeData = pd.DataFrame(pData)
-            print('###', timesBetween[0])
-            start = datetime.datetime.strptime(timestamps[0], "%Y:%m:%d %H:%M:%S.%f")
-            timestamps = self.__getImageSequenceTimestamps(start, images, gpsFields, pData)
-            #timestamps.to_csv('./01.csv', sep=',', encoding='utf-8', index=False)
-        else:
-            timestamps = self.getTimewrapTimestamps(gpsData, images, videoFieldData)
-        data = {
-            "video_field_data": videoFieldData,
-            "timestamps": timestamps,
-            "images": images
-        }
-        return data
-
-    def getTimewrapTimestamps(self, gpsData, images, videoFieldData):
-        dlen = len(gpsData)
-        if dlen < 1:
-            return pd.DataFrame([])
-        tw = self.__config["time_warp"]
-        fr = self.__config["frame_rate"]
-        tw = int(tw.replace('x', ''))
-        if fr < 1:
-            fr = 5
-        tw = float(tw)/float(fr)
-        ms = int(tw*1000.0)
-        i = 0
-        timesBetween = []
-        timeData = []
-        for gvalue in gpsData:
-            dlist = list(gpsData[i].items())
-            dlist = dlist[0]
-            if i == 0:
-                start = datetime.datetime.strptime(dlist[0], "%Y:%m:%d %H:%M:%S.%f")
-            timesBetween.append(datetime.datetime.strptime(dlist[0], "%Y:%m:%d %H:%M:%S.%f"))
-            dlist[1][0]['GPSDateTime'] = datetime.datetime.strptime(dlist[0], "%Y:%m:%d %H:%M:%S.%f")
-            timeData.append(dlist[1][0])
-            i = i + 1
-        self.__createAllGpsGpx(timeData, videoFieldData)
-        times = pd.date_range(start=start, periods=len(images), freq="{}ms".format(ms))
-        tData = []
-        for t in times:
-            z = min(timesBetween, key=lambda x: abs(x - t))
-            for tdt in timeData:
-                if tdt["GPSDateTime"] == z:
-                    tData.append(tdt.copy())
-        return pd.DataFrame(tData)
-    
-    def __geotagImages(self, data):
-        print("Starting to geotag images...")
-        i = 0
-        for img in data["images"]:
-            image = img
-            img = data["timestamps"].iloc[i].copy()
-            img["image"] = image
-            logging.info("# image: {}, GPSDateTime: {}, GPSLatitude: {}, GPSLongitude: {}, GPSAltitude: {}".format(img["image"], img["GPSDateTime"], img["GPSLatitude"], img["GPSLongitude"], img["GPSAltitude"]))
-            GPSDateTime = datetime.datetime.strftime(img["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
-            tt = GPSDateTime.split(".")
-            cmdMetaData = [
-                '-DateTimeOriginal="{0}Z"'.format(self.removeEntities(GPSDateTime)),
-                '-SubSecTimeOriginal="{0}"'.format(self.removeEntities(tt[1])),
-                '-SubSecDateTimeOriginal="{0}Z"'.format(self.removeEntities(".".join(tt)))
-            ]
-            cmdMetaData.append('-overwrite_original')
-            cmdMetaData.append("{}{}{}".format(self.__config["imageFolderPath"], os.sep, img["image"]))
-            output = self._exiftool(cmdMetaData)
-            i = i+1
-        cmd = ["-geotag", self.__config["imageFolderPath"]+os.sep+self.__config["imageFolder"] + "_video.gpx", "'-geotime<${subsecdatetimeoriginal}'", '-overwrite_original', self.__config["imageFolderPath"]]
-        output = self._exiftool(cmd)
 
     def __updateImagesMetadata(self, data):
         print("Starting to inject additional metadata into the images...")
@@ -931,6 +775,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
 
         gpxFileName = self.__config["imageFolder"] + "_photos.gpx"
         gpxFileName = self.__saveXmlMetaFile(gpxFileName, gpxData)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
