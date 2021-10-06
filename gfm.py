@@ -10,6 +10,9 @@ import gpxpy
 class TrekviewHelpers():
     def __init__(self, config):
         """"""
+    def getListOfTuples(self, mylist, n):
+        args = [iter(mylist)] * n
+        return itertools.zip_longest(fillvalue=None, *args)
 
     def removeEntities(self, text):
         text = re.sub('"', '', html.unescape(text))
@@ -125,8 +128,10 @@ class TrekViewGoProMp4(TrekviewHelpers):
             self.__breakIntoFrames(self.__config["args"].input)
         
         videoData = self.__extractVideoInformation(videoData)
-        
-        self.__processVideoInformation(videoData)
+
+        self.__geotagImages(videoData)
+
+        self.__updateImagesMetadata(videoData)
 
     def __setLogging(self):
         args = self.__config["args"]
@@ -684,9 +689,30 @@ class TrekViewGoProMp4(TrekviewHelpers):
                     tData.append(tdt.copy())
         return pd.DataFrame(tData)
     
-    def __processVideoInformation(self, data):
-        print("Starting to inject metadata into the images...")
+    def __geotagImages(self, data):
+        print("Starting to geotag images...")
         i = 0
+        for img in data["images"]:
+            image = img
+            img = data["timestamps"].iloc[i].copy()
+            img["image"] = image
+            logging.info("# image: {}, GPSDateTime: {}, GPSLatitude: {}, GPSLongitude: {}, GPSAltitude: {}".format(img["image"], img["GPSDateTime"], img["GPSLatitude"], img["GPSLongitude"], img["GPSAltitude"]))
+            GPSDateTime = datetime.datetime.strftime(img["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
+            tt = GPSDateTime.split(".")
+            cmdMetaData = [
+                '-DateTimeOriginal="{0}Z"'.format(self.removeEntities(GPSDateTime)),
+                '-SubSecTimeOriginal="{0}"'.format(self.removeEntities(tt[1])),
+                '-SubSecDateTimeOriginal="{0}Z"'.format(self.removeEntities(".".join(tt)))
+            ]
+            cmdMetaData.append("{}{}{}".format(self.__config["imageFolderPath"], os.sep, img["image"]))
+            output = self._exiftool(cmdMetaData)
+            i = i+1
+        cmd = ["-geotag", self.__config["imageFolderPath"]+os.sep+self.__config["imageFolder"] + "_video.gpx", "'-geotime<${subsecdatetimeoriginal}'", '-overwrite_original', self.__config["imageFolderPath"]]
+        output = self._exiftool(cmd)
+
+    def __updateImagesMetadata(self, data):
+        print("Starting to inject additional metadata into the images...")
+
         gpx = gpxpy.gpx.GPX()
 
         # Create first track in our GPX:
@@ -697,74 +723,62 @@ class TrekViewGoProMp4(TrekviewHelpers):
         gpx_segment = gpxpy.gpx.GPXTrackSegment()
         gpx_track.segments.append(gpx_segment)
 
-        #print('########', len(data["images"]), len(data["timestamps"]))
-        for img in data["images"]:
-            image = img
-            img = data["timestamps"].iloc[i].copy()
-            img["image"] = image
-            logging.info("# image: {}, GPSDateTime: {}, GPSLatitude: {}, GPSLongitude: {}, GPSAltitude: {}".format(img["image"], img["GPSDateTime"], img["GPSLatitude"], img["GPSLongitude"], img["GPSAltitude"]))
-            GPSDateTime = datetime.datetime.strftime(img["GPSDateTime"], "%Y:%m:%d %H:%M:%S.%f")
-            tt = GPSDateTime.split(".")
-            ttz = GPSDateTime.split(" ")
-            alt = img["GPSAltitude"].split(" ")[0]
-            latRef = self.latLngToDirection(img["GPSLatitude"])
-            lngRef = self.latLngToDirection(img["GPSLongitude"])
-            altRef = 0 if float(alt) > 0.0 else -1
-            cmdMetaData = [
-                '-DateTimeOriginal="{0}Z"'.format(self.removeEntities(GPSDateTime)),
-                '-SubSecTimeOriginal="{0}"'.format(self.removeEntities(tt[1])),
-                '-SubSecDateTimeOriginal="{0}Z"'.format(self.removeEntities(".".join(tt))),
-                '-IFD0:Model="{}"'.format(self.removeEntities(data["video_field_data"]["DeviceName"])),
-            ]
-            if data["video_field_data"]["ProjectionType"] == "equirectangular0":
-                cmdMetaData.append('-XMP-GPano:StitchingSoftware="{}"'.format(self.removeEntities(data["video_field_data"]["StitchingSoftware"])))
-                cmdMetaData.append('-XMP-GPano:SourcePhotosCount="{}"'.format(2))
-                cmdMetaData.append('-XMP-GPano:UsePanoramaViewer="{}"'.format("true"))
-                cmdMetaData.append('-XMP-GPano:ProjectionType="{}"'.format(self.removeEntities(data["video_field_data"]["ProjectionType"])))
-                cmdMetaData.append('-XMP-GPano:CroppedAreaImageHeightPixels="{}"'.format(data["video_field_data"]["SourceImageHeight"]))
-                cmdMetaData.append('-XMP-GPano:CroppedAreaImageWidthPixels="{}"'.format(data["video_field_data"]["SourceImageWidth"]))
-                cmdMetaData.append('-XMP-GPano:FullPanoHeightPixels="{}"'.format(data["video_field_data"]["SourceImageHeight"]))
-                cmdMetaData.append('-XMP-GPano:FullPanoWidthPixels="{}"'.format(data["video_field_data"]["SourceImageWidth"]))
-                cmdMetaData.append('-XMP-GPano:CroppedAreaLeftPixels="{}"'.format(0))
-                cmdMetaData.append('-XMP-GPano:CroppedAreaTopPixels="{}"'.format(0))
-            cmdMetaData.append('-overwrite_original')
-            cmdMetaData.append("{}{}{}".format(self.__config["imageFolderPath"], os.sep, img["image"]))
-            output = self._exiftool(cmdMetaData)
-            
-            a = self.latLngToDecimal(img["GPSLatitude"])
-            b = self.latLngToDecimal(img["GPSLongitude"])
-            alt = img["GPSAltitude"].split(" ")[0]
-            t = img["GPSDateTime"]
-            dist = 0
-            time_diff = 0
-            azimuth1 = 0
+        counter = 0
+        photosLen = len(data['images'])
+        for img in data['images']:
             gps_speed_accuracy_meters = '0.1'
-            if i < len(data["timestamps"])-1:
-                image_next = img
-                img_next = data["timestamps"].iloc[i+1].copy()
-                img_next["image"] = image_next
-                t_start = img["GPSDateTime"]
-                d_start = (self.latLngToDecimal(img["GPSLatitude"]), self.latLngToDecimal(img["GPSLongitude"])) 
-                t_end = img_next["GPSDateTime"]
-                time_diff = (t_end - t_start).total_seconds()
-                d_end = (self.latLngToDecimal(img_next["GPSLatitude"]), self.latLngToDecimal(img_next["GPSLongitude"]))    
-                altitude = self.getAltitudeFloat(img["GPSAltitude"])
-                altitude_next = self.getAltitudeFloat(img_next["GPSAltitude"])
-                dist = haversine(d_start, d_end, Unit.METERS)
-                brng = Geodesic.WGS84.Inverse(d_start[0], d_start[1], d_end[0], d_end[1])
+            gps_fix_type = ''
+            gps_vertical_accuracy_meters = ''
+            gps_horizontal_accuracy_meters = ''
+            if counter < photosLen - 1:
+                photo = [data['images'][counter], data['images'][counter + 1]]
+                #Get metadata from exiftool
+                cmd = ["-ee", "-G3", "-j", "-api", "LargeFileSupport=1", self.__config["imageFolderPath"]+os.sep+photo[0]]
+                output = self._exiftool(cmd)
+                start_photo = json.loads(output["output"])[0]
+                cmd = ["-ee", "-G3", "-j", "-api", "LargeFileSupport=1", self.__config["imageFolderPath"]+os.sep+photo[1]]
+                output = self._exiftool(cmd)
+                end_photo = json.loads(output["output"])[0]
+
+                #Get Times from metadata
+                start_time = datetime.datetime.strptime(start_photo["Main:GPSDateTime"].replace("Z", ""), "%Y:%m:%d %H:%M:%S.%f")
+                end_time = datetime.datetime.strptime(end_photo["Main:GPSDateTime"].replace("Z", ""), "%Y:%m:%d %H:%M:%S.%f")
+                time_diff = (end_time - start_time).total_seconds()
+
+                #Get Latitude, Longitude and Altitude
+                start_latitude = self.latLngToDecimal(start_photo["Main:GPSLatitude"])
+                start_longitude = self.latLngToDecimal(start_photo["Main:GPSLongitude"])
+                start_altitude = self.getAltitudeFloat(start_photo["Main:GPSAltitude"])
+
+                end_latitude = self.latLngToDecimal(end_photo["Main:GPSLatitude"])
+                end_longitude = self.latLngToDecimal(end_photo["Main:GPSLongitude"])
+                end_altitude = self.getAltitudeFloat(end_photo["Main:GPSAltitude"])
+
+                #Find Haversine Distance
+                distance = haversine((start_latitude, start_longitude), (end_latitude, end_longitude), Unit.METERS)
+
+                #Find Bearing
+                brng = Geodesic.WGS84.Inverse(start_latitude, start_longitude, end_latitude, end_longitude)
                 azimuth1 = math.radians(brng['azi1'])
                 azimuth2 = math.radians(brng['azi2'])
-                AC = (math.cos(math.radians(azimuth1))*dist)
-                BC = (math.sin(math.radians(azimuth2))*dist)
+
+                #Create Metada Fields
+                AC = (math.cos(math.radians(azimuth1))*distance)
+                BC = (math.sin(math.radians(azimuth2))*distance)
                 gps_velocity_east_next_meters_second = 0 if time_diff == 0.0 else AC/time_diff  
                 gps_velocity_north_next_meters_second = 0 if time_diff == 0.0 else BC/time_diff
                 gps_velocity_up_next_meters_second = 0 if AC == 0 else BC/AC
-                gps_speed_next_meters_second = 0 if time_diff == 0.0 else dist/time_diff 
+                gps_speed_next_meters_second = 0 if time_diff == 0.0 else distance/time_diff 
                 gps_azimuth_next_degrees = azimuth1
-                gps_pitch_next_degrees = 0 if dist == 0.0 else (altitude_next - altitude) / dist
-                gps_distance_next_meters = dist
+                gps_pitch_next_degrees = 0 if distance == 0.0 else (end_altitude - start_altitude) / distance
+                gps_distance_next_meters = distance
                 gps_time_next_seconds = time_diff
             else:
+                photo = [data['images'][counter], None]
+                #Get metadata from exiftool
+                cmd = ["-ee", "-G3", "-j", "-api", "LargeFileSupport=1", self.__config["imageFolderPath"]+os.sep+photo[0]]
+                output = self._exiftool(cmd)
+                start_photo = json.loads(output["output"])
                 gps_velocity_east_next_meters_second = 0
                 gps_velocity_north_next_meters_second = 0
                 gps_velocity_up_next_meters_second = 0
@@ -773,14 +787,16 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 gps_pitch_next_degrees = 0
                 gps_distance_next_meters = 0
                 gps_time_next_seconds = 0
-            gps_fix_type = img["GPSMeasureMode"]
-            gps_vertical_accuracy_meters = img["GPSHPositioningError"]
-            gps_horizontal_accuracy_meters = img["GPSHPositioningError"]
-            i = i + 1
-            t = img["GPSDateTime"]
+
             t1970 = datetime.datetime.strptime("1970:01:01 00:00:00.000000", "%Y:%m:%d %H:%M:%S.%f")
-            gps_epoch_seconds = (t-t1970).total_seconds()
-            gpx_point = gpxpy.gpx.GPXTrackPoint(latitude=a, longitude=b, time=t, elevation=alt)
+            gps_epoch_seconds = (start_time-t1970).total_seconds()
+
+            gpx_point = gpxpy.gpx.GPXTrackPoint(
+                latitude=start_latitude, 
+                longitude=start_longitude, 
+                time=start_time, 
+                elevation=start_altitude
+            )
             gpx_segment.points.append(gpx_point)
             ext = {
                 "gps_epoch_seconds": gps_epoch_seconds,
@@ -804,13 +820,27 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 """)
                 gpx_point.extensions.append(gpx_extension)
             
-        gpxData = gpx.to_xml() 
-        gpxFileName = self.__config["imageFolder"] + "_photos.gpx"
-        gpxFileName = self.__saveXmlMetaFile(gpxFileName, gpxData)
-        if gpxFileName is None:
-            exit("Unable to save gpx file.")
-        cmd = ["-geotag", gpxFileName, "'-geotime<${subsecdatetimeoriginal}'", '-overwrite_original', self.__config["imageFolderPath"]]
-        output = self._exiftool(cmd)
+            gpxData = gpx.to_xml()
+
+            gpxFileName = self.__config["imageFolder"] + "_photos.gpx"
+            gpxFileName = self.__saveXmlMetaFile(gpxFileName, gpxData)
+
+            cmdMetaData = []
+            if data["video_field_data"]["ProjectionType"] == "equirectangular":
+                cmdMetaData.append('-XMP-GPano:StitchingSoftware="{}"'.format(self.removeEntities(data["video_field_data"]["StitchingSoftware"])))
+                cmdMetaData.append('-XMP-GPano:SourcePhotosCount="{}"'.format(2))
+                cmdMetaData.append('-XMP-GPano:UsePanoramaViewer="{}"'.format("true"))
+                cmdMetaData.append('-XMP-GPano:ProjectionType="{}"'.format(self.removeEntities(data["video_field_data"]["ProjectionType"])))
+                cmdMetaData.append('-XMP-GPano:CroppedAreaImageHeightPixels="{}"'.format(data["video_field_data"]["SourceImageHeight"]))
+                cmdMetaData.append('-XMP-GPano:CroppedAreaImageWidthPixels="{}"'.format(data["video_field_data"]["SourceImageWidth"]))
+                cmdMetaData.append('-XMP-GPano:FullPanoHeightPixels="{}"'.format(data["video_field_data"]["SourceImageHeight"]))
+                cmdMetaData.append('-XMP-GPano:FullPanoWidthPixels="{}"'.format(data["video_field_data"]["SourceImageWidth"]))
+                cmdMetaData.append('-XMP-GPano:CroppedAreaLeftPixels="{}"'.format(0))
+                cmdMetaData.append('-XMP-GPano:CroppedAreaTopPixels="{}"'.format(0))
+            cmdMetaData.append('-overwrite_original')
+            cmdMetaData.append("{}{}{}".format(self.__config["imageFolderPath"], os.sep, photo[1]))
+            output = self._exiftool(cmdMetaData)
+            counter = counter + 1
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
