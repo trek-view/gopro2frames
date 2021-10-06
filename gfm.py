@@ -541,8 +541,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
             'FileSize',
             'FileType',
             'FileTypeExtension',
-            'CompressorName',
-            'GPSMeasureMode'
+            'CompressorName'
 
         ] 
         gpsFields = [
@@ -570,8 +569,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
             'FileSize',
             'FileType',
             'FileTypeExtension',
-            'CompressorName',
-            'GPSMeasureMode'
+            'CompressorName'
         ] 
         gpsFields = [
             'GPSDateTime', 
@@ -593,6 +591,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
         check = 0
         checkSub = 0
         dlen = len(allGps)
+        
         while check < dlen:
             dtlist = list(allGps[check].items())
             dtlist = dtlist[0]
@@ -619,7 +618,6 @@ class TrekViewGoProMp4(TrekviewHelpers):
             if check == dlen:
                 gpsData.append(data.copy())
                 break
-            break
         timesBetween = []
         dlen = len(gpsData)
         tw = self.__config["time_warp"]
@@ -637,7 +635,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
                     diff = int(((end - start).total_seconds()/float(len(dlist[1])))*1000.0)
                     #check this later
                     if diff == 0:
-                        print('!!', start, end)
+                        #print('!!', start, end)
                         """zend = end
                         for tbet in timesBetween:
                             if tbet >= end:
@@ -652,19 +650,27 @@ class TrekViewGoProMp4(TrekviewHelpers):
                     #print(diff, end, start, len(dlist[1]))
                     new = pd.date_range(start=start, end=end, closed='left', freq="{}ms".format(diff))
                     ii = 0 
+                    dlLen = 1 if len(dlist[1]) < 1 else len(dlist[1])
+                    nlLen = 1 if len(new) < 1 else len(new)
+                    _ms = math.floor(dlLen/nlLen)
+                    _ms = 1 if _ms < 1 else _ms
                     for n in dlist[1]:
                         dlist[1][ii]['GPSDateTime'] = new[ii]
                         pData.append(dlist[1][ii].copy())
-                        ii = ii+1
+                        ii = ii+_ms
                 else:
                     end = start+datetime.timedelta(0, 1.0) 
                     diff = int((0.05)*1000.0)
                     new = pd.date_range(start=start, end=end, closed='left', freq="{}ms".format(diff))
                     ii = 0 
+                    dlLen = 1 if len(dlist[1]) < 1 else len(dlist[1])
+                    nlLen = 1 if len(new) < 1 else len(new)
+                    _ms = math.floor(dlLen/nlLen)
+                    _ms = 1 if _ms < 1 else _ms
                     for n in dlist[1]:
                         dlist[1][ii]['GPSDateTime'] = new[ii]
                         pData.append(dlist[1][ii].copy())
-                        ii = ii+1
+                        ii = ii+_ms
                 i = i+1
             self.__createAllGpsGpx(pData, videoFieldData)
             timeData = pd.DataFrame(pData)
@@ -703,6 +709,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
             dlist[1][0]['GPSDateTime'] = datetime.datetime.strptime(dlist[0], "%Y:%m:%d %H:%M:%S.%f")
             timeData.append(dlist[1][0])
             i = i + 1
+        self.__createAllGpsGpx(timeData, videoFieldData)
         times = pd.date_range(start=start, periods=len(images), freq="{}ms".format(ms))
         tData = []
         for t in times:
@@ -710,7 +717,6 @@ class TrekViewGoProMp4(TrekviewHelpers):
             for tdt in timeData:
                 if tdt["GPSDateTime"] == z:
                     tData.append(tdt.copy())
-        self.__createAllGpsGpx(tData, videoFieldData)
         return pd.DataFrame(tData)
     
     def __geotagImages(self, data):
