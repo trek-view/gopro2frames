@@ -124,7 +124,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
             videoData = self.__extractVideoInformationPre(args.input, "Track3")
         else:
             videoData = self.__extractVideoInformationPre(args.input, "Track2")
-        
+
         fileType = self.__validateVideo(videoData["video_field_data"])
         if fileType == "360":
             self.__config["fileType"] = '360'
@@ -220,10 +220,6 @@ class TrekViewGoProMp4(TrekviewHelpers):
         else:
             metaFormat = True
         
-        if "ProjectionType" not in videoData:
-            logging.critical("This does not appear to be a GoPro 360 video. Only mp4 videos with a 360 equirectangular projection are accepted. Please make sure you are uploading 360 mp4 videos from your camera.")
-            exit("This does not appear to be a GoPro 360 video. Only mp4 videos with a 360 equirectangular projection are accepted. Please make sure you are uploading 360 mp4 videos from your camera.")
-
         if videoData["ProjectionType"].strip()  != 'equirectangular':
             if metaFormat is False:
                 logging.critical("This does not appear to be a GoPro 360 video. Only mp4 videos with a 360 equirectangular projection are accepted. Please make sure you are uploading 360 mp4 videos from your camera.")
@@ -233,11 +229,6 @@ class TrekViewGoProMp4(TrekviewHelpers):
         if videoData['DeviceName'].strip() not in devices:
             logging.critical("This file does not look like it was captured using a GoPro camera. Only content taken using a GoPro 360 Camera are currently supported.")
             exit("This file does not look like it was captured using a GoPro camera. Only content taken using a GoPro 360 Camera are currently supported.")
-        
-        StitchingSoftwares = ["Fusion Studio / GStreamer", "Spherical Metadata Tool"]
-        if videoData['StitchingSoftware'].strip() not in StitchingSoftwares:
-            logging.critical("Only mp4's stitched using GoPro software are supported. Please use GoPro software to stitch your GoPro 360 videos.")
-            exit("Only mp4's stitched using GoPro software are supported. Please use GoPro software to stitch your GoPro 360 videos.")
 
         if self.__config["frame_rate"] > 5:
             logging.warning("It appears the frame rate of this video is very low. You can continue, but the images in the Sequence might not render as expected.")
@@ -256,6 +247,12 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 if videoData["CompressorName"] == "H.265":
                     logging.critical("This does not appear to be a GoPro .360 file. Please use the .360 video created from your GoPro camera only.")
                     exit("This does not appear to be a GoPro .360 file. Please use the .360 video created from your GoPro camera only.")
+        #if videoData["FileType"].strip() == '360':
+        StitchingSoftwares = ["Fusion Studio / GStreamer", "Spherical Metadata Tool"]
+        if videoData['StitchingSoftware'].strip() not in StitchingSoftwares:
+            logging.critical("Only mp4's stitched using GoPro software are supported. Please use GoPro software to stitch your GoPro 360 videos.")
+            exit("Only mp4's stitched using GoPro software are supported. Please use GoPro software to stitch your GoPro 360 videos.")
+
         return videoData["FileType"].strip()
     
     def __convert360tomp4(self):
@@ -345,6 +342,8 @@ class TrekViewGoProMp4(TrekviewHelpers):
     def __getXMLData(self, root, videoInfoFields, gpsFields, Track):
         gpsData = {}
         videoFieldData = {}
+        videoFieldData['ProjectionType'] = ''
+        videoFieldData['StitchingSoftware'] = ''
         allGps = []
         check = 0
         nsmap = root[0].nsmap
@@ -389,6 +388,55 @@ class TrekViewGoProMp4(TrekviewHelpers):
                     else:
                         videoFieldData[tag.strip()] = elem.text.strip()
         #self.__getAllGpsAlongTimeData(gpsData)
+        if len(allGps) < 1:
+            Track = "Track4"
+            gpsData = {}
+            videoFieldData = {}
+            videoFieldData['ProjectionType'] = ''
+            videoFieldData['StitchingSoftware'] = ''
+            allGps = []
+            check = 0
+            nsmap = root[0].nsmap
+            anchor = ''
+            data = {}
+            adata = {}
+            for elem in root[0]:
+                eltags = elem.tag.split("}")
+                nm = eltags[0].replace("{", "")
+                tag = eltags[-1]
+                if (tag in gpsFields) and (nm == nsmap[Track]):
+                    if tag == 'GPSDateTime':
+                        anchor = str(elem.text.strip())
+                        gpsData[anchor] = {
+                            'GPSData': []
+                        }
+                        if len(adata) > 0:
+                            for k, v in adata.items():
+                                gpsData[anchor][k] = v
+                            adata = {}
+                    else:
+                        if tag.strip() in ['GPSLatitude', 'GPSLongitude', 'GPSAltitude']:
+                            if (len(data) <= 3):
+                                data[tag.strip()] = elem.text.strip()
+                                if len(data) == 3:
+                                    gpsData[anchor]['GPSData'].append(data)
+                                    data = {}
+                        else:
+                            if anchor != '':
+                                gpsData[anchor][tag.strip()] = elem.text.strip()
+                            else:
+                                adata[tag.strip()] = elem.text.strip()
+                    allGps.append({tag: elem.text})
+                else:
+                    if tag.strip() in videoInfoFields:
+                        if tag.strip() == 'MetaFormat':
+                            if elem.text.strip() == 'gpmd':
+                                videoFieldData[tag.strip()] = elem.text.strip()
+                            else:
+                                if 'MetaFormat' in videoFieldData and videoFieldData[tag.strip()] != 'gpmd':
+                                    videoFieldData[tag.strip()] = ''
+                        else:
+                            videoFieldData[tag.strip()] = elem.text.strip()
         return {
             "allGps": allGps,
             "video_field_data": videoFieldData
@@ -464,8 +512,9 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 gps_velocity_north_next_meters_second = 0 if time_diff == 0.0 else BC/time_diff
                 gps_velocity_up_next_meters_second = 0 if AC == 0 else BC/AC
                 gps_speed_next_meters_second = 0 if time_diff == 0.0 else dist/time_diff 
-                gps_azimuth_next_degrees = azimuth1
-                gps_pitch_next_degrees = 0 if dist == 0.0 else (altitude_next - altitude) / dist
+                gps_azimuth_next_degrees = azimuth1%360
+                pitch_default = -90 if (altitude_next - altitude) < 0 else 90
+                gps_pitch_next_degrees = pitch_default if dist == 0.0 else ((altitude_next - altitude) / dist)
                 gps_distance_next_meters = dist
                 gps_time_next_seconds = time_diff
             else:
@@ -674,6 +723,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 i = i+1
             self.__createAllGpsGpx(pData, videoFieldData)
             timeData = pd.DataFrame(pData)
+            print('###', timesBetween[0])
             start = datetime.datetime.strptime(timestamps[0], "%Y:%m:%d %H:%M:%S.%f")
             timestamps = self.__getImageSequenceTimestamps(start, images, gpsFields, pData)
             #timestamps.to_csv('./01.csv', sep=',', encoding='utf-8', index=False)
@@ -758,7 +808,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
         photosLen = len(data['images'])
         for img in data['images']:
             gps_speed_accuracy_meters = '0.1'
-            gps_fix_type = '3'
+            gps_fix_type = '3-Dimensional Measurement'
             gps_vertical_accuracy_meters = '0.1'
             gps_horizontal_accuracy_meters = '0.1'
             if counter < photosLen - 1:
@@ -792,7 +842,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 brng = Geodesic.WGS84.Inverse(start_latitude, start_longitude, end_latitude, end_longitude)
                 azimuth1 = math.radians(brng['azi1'])
                 azimuth2 = math.radians(brng['azi2'])
-
+                
                 #Create Metada Fields
                 AC = (math.cos(math.radians(azimuth1))*distance)
                 BC = (math.sin(math.radians(azimuth2))*distance)
@@ -800,9 +850,10 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 gps_velocity_north_next_meters_second = 0 if time_diff == 0.0 else BC/time_diff
                 gps_velocity_up_next_meters_second = 0 if AC == 0 else BC/AC
                 gps_speed_next_meters_second = 0 if time_diff == 0.0 else distance/time_diff 
-                gps_speed_next_kmeters_second = gps_speed_next_meters_second #in kms
-                gps_azimuth_next_degrees = azimuth1
-                gps_pitch_next_degrees = 0 if distance == 0.0 else (end_altitude - start_altitude) / distance
+                gps_speed_next_kmeters_second = gps_speed_next_meters_second*1000.0 #in kms
+                gps_azimuth_next_degrees = azimuth1%360
+                pitch_default = -90 if (end_altitude - start_altitude) < 0 else 90
+                gps_pitch_next_degrees = pitch_default if distance == 0.0 else (end_altitude - start_altitude) / distance
                 gps_distance_next_meters = distance
                 gps_time_next_seconds = time_diff
             else:
