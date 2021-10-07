@@ -24,7 +24,7 @@ Is elevation change to next photo.
 
 Uses elevation values from each photo. Calculation is:
 
-`Photo Next Elevation - Photo Elevation GPSDateTime`
+`Photo Next Elevation - Photo Elevation`
 
 Output in meters.
 
