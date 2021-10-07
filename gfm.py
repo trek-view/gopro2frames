@@ -152,6 +152,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
         startTime = videoData['startTime']
         icounter = 0
         if len(videoData['images']) > 0:
+            print('\nStarting to geotag all the images.\n')
             for img in videoData['images']:
                 GPSDateTime = datetime.datetime.strftime(startTime, "%Y:%m:%d %H:%M:%S.%f")
                 tt = GPSDateTime.split(".")
@@ -168,6 +169,8 @@ class TrekViewGoProMp4(TrekviewHelpers):
             cmd = ["-geotag", self.__config["imageFolderPath"]+os.sep+self.__config["imageFolder"] + "_video.gpx", "'-geotime<${subsecdatetimeoriginal}'", '-overwrite_original', self.__config["imageFolderPath"]]
             output = self._exiftool(cmd)
             self.__updateImagesMetadata(videoData)
+        else:
+            exit('Not enough images available for geotagging.')
             
 
     def __setLogging(self):
@@ -783,6 +786,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
             cmdMetaData.append("{}{}{}".format(self.__config["imageFolderPath"], os.sep, photo[0]))
             output = self._exiftool(cmdMetaData)
             counter = counter + 1
+            print("Injecting additional metadata to {} is done.".format(photo[0]))
         gpxData = gpx.to_xml()
 
         gpxFileName = self.__config["imageFolder"] + "_photos.gpx"
