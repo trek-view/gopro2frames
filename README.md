@@ -109,7 +109,6 @@ Options:
 	* `15x`
 	* `30x`
 * -d enable debug mode, default: false. If flag is passed, will be set to true.
-* -f custom ffmpeg install path, default: none
 
 #### Examples (MacOS)
 
