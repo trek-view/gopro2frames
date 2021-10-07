@@ -44,6 +44,86 @@ class TrekviewHelpers():
         brng = (((brng + 360) % 360))
         return brng
 
+    def calculateExtensions(self, gps, times, positions, etype=1, utype=1):
+        if utype == 1:
+            gps_speed_accuracy_meters = '0.1'
+            gps_fix_type = gps["GPSMeasureMode"]
+            gps_vertical_accuracy_meters = gps["GPSHPositioningError"]
+            gps_horizontal_accuracy_meters = gps["GPSHPositioningError"]
+        else:
+            gps_speed_accuracy_meters = '0.1'
+            gps_fix_type = '3-Dimensional Measurement'
+            gps_vertical_accuracy_meters = '0.1'
+            gps_horizontal_accuracy_meters = '0.1'
+        
+        if etype == 1:
+            #Get Times from metadata
+            start_time = times[0]
+            end_time = times[1]
+            gps_epoch_seconds = times[2]
+            time_diff = (end_time - start_time).total_seconds()
+
+            #Get Latitude, Longitude and Altitude
+            start_latitude = positions[0][0]
+            start_longitude = positions[0][1]
+            start_altitude = positions[0][2]
+
+            end_latitude = positions[1][0]
+            end_longitude = positions[1][1]
+            end_altitude = positions[1][2]
+
+            #Find Haversine Distance
+            distance = haversine((start_latitude, start_longitude), (end_latitude, end_longitude), Unit.METERS)
+
+            #Find Bearing
+            brng = Geodesic.WGS84.Inverse(start_latitude, start_longitude, end_latitude, end_longitude)
+            azimuth1 = (brng['azi1'] + 360) % 360
+            azimuth2 = (brng['azi2'] + 360) % 360
+            
+            compass_bearing = azimuth2
+            #Create Metada Fields
+            AC = (math.cos(math.radians(azimuth1))*distance)
+            BC = (math.sin(math.radians(azimuth2))*distance)
+            gps_elevation_change_next_meters = end_altitude - start_altitude
+            gps_velocity_east_next_meters_second = 0 if time_diff == 0.0 else AC/time_diff  
+            gps_velocity_north_next_meters_second = 0 if time_diff == 0.0 else BC/time_diff
+            gps_velocity_up_next_meters_second = 0 if time_diff == 0.0 else gps_elevation_change_next_meters/time_diff
+            gps_speed_next_meters_second = 0 if time_diff == 0.0 else distance/time_diff 
+            gps_heading_next_degrees = compass_bearing
+            gps_pitch_next_degrees = 0 if distance == 0.0 else (gps_elevation_change_next_meters / distance)%360
+            gps_distance_next_meters = distance
+            gps_speed_next_kmeters_second = gps_distance_next_meters/1000.0 #in kms
+            gps_time_next_seconds = time_diff
+        else:
+            gps_epoch_seconds = times[2]
+            gps_velocity_east_next_meters_second = 0
+            gps_velocity_north_next_meters_second = 0
+            gps_velocity_up_next_meters_second = 0
+            gps_speed_next_meters_second = 0
+            gps_speed_next_kmeters_second = 0
+            gps_heading_next_degrees = 0
+            gps_elevation_change_next_meters = 0
+            gps_pitch_next_degrees = 0
+            gps_distance_next_meters = 0
+            gps_time_next_seconds = 0
+        return {
+            "gps_epoch_seconds": gps_epoch_seconds,
+            "gps_fix_type": gps_fix_type,
+            "gps_vertical_accuracy_meters": gps_vertical_accuracy_meters,
+            "gps_horizontal_accuracy_meters": gps_horizontal_accuracy_meters,
+            "gps_velocity_east_next_meters_second": gps_velocity_east_next_meters_second,
+            "gps_velocity_north_next_meters_second": gps_velocity_north_next_meters_second,
+            "gps_velocity_up_next_meters_second": gps_velocity_up_next_meters_second,
+            "gps_speed_accuracy_meters": gps_speed_accuracy_meters,
+            "gps_speed_next_meters_second": gps_speed_next_meters_second,
+            "gps_heading_next_degrees": gps_heading_next_degrees,
+            "gps_elevation_change_next_meters": gps_elevation_change_next_meters,
+            "gps_pitch_next_degrees": gps_pitch_next_degrees,
+            "gps_distance_next_meters": gps_distance_next_meters,
+            "gps_time_next_seconds": gps_time_next_seconds,
+            "gps_speed_next_kmeters_second": gps_speed_next_kmeters_second
+        }
+
     def __subprocess(self, command, sh=0, capture_output=True):
         ret = None
         try:
@@ -492,7 +572,6 @@ class TrekViewGoProMp4(TrekviewHelpers):
                     icounter = icounter + _ms
             else:
                 start_gps = gpsData[counter]
-
                 #Get Times from metadata
                 start_time = datetime.datetime.strptime(start_gps["GPSDateTime"].replace("Z", ""), "%Y:%m:%d %H:%M:%S.%f")
                 end_time = start_time+datetime.timedelta(0, 1.0) 
@@ -515,19 +594,14 @@ class TrekViewGoProMp4(TrekviewHelpers):
         tlen = len(Timestamps)
         t1970 = datetime.datetime.strptime("1970:01:01 00:00:00.000000", "%Y:%m:%d %H:%M:%S.%f")
         for gps in Timestamps:
-            gps_speed_accuracy_meters = '0.1'
-            gps_fix_type = gps["GPSMeasureMode"]
-            gps_vertical_accuracy_meters = gps["GPSHPositioningError"]
-            gps_horizontal_accuracy_meters = gps["GPSHPositioningError"]
-            if icounter < tlen-1:
-                start_time = gps["GPSDateTime"]
-                gps_epoch_seconds = (start_time-t1970).total_seconds()
+            #Get Start Time from metadata
+            start_time = gps["GPSDateTime"]
+            gps_epoch_seconds = (start_time-t1970).total_seconds()
 
-                #Get Times from metadata
-                start_time = Timestamps[icounter]["GPSDateTime"]
+            if icounter < tlen-1:
+                #Get End Time from metadata
                 end_time = Timestamps[icounter+1]["GPSDateTime"]
                 time_diff = (end_time - start_time).total_seconds()
-                print(start_time, end_time, time_diff)
 
                 #Get Latitude, Longitude and Altitude
                 start_latitude = self.latLngToDecimal(gps["GPSLatitude"])
@@ -545,59 +619,26 @@ class TrekViewGoProMp4(TrekviewHelpers):
                     elevation=start_altitude
                 )
                 gpx_segment.points.append(gpx_point)
-
-                #Find Haversine Distance
-                distance = haversine((start_latitude, start_longitude), (end_latitude, end_longitude), Unit.METERS)
-
-                #Find Bearing
-                brng = Geodesic.WGS84.Inverse(start_latitude, start_longitude, end_latitude, end_longitude)
-                azimuth1 = (brng['azi1'] + 360) % 360
-                azimuth2 = (brng['azi2'] + 360) % 360
-                
-                compass_bearing = azimuth2
-
-                #Create Metada Fields
-                AC = (math.cos(math.radians(azimuth1))*distance)
-                BC = (math.sin(math.radians(azimuth2))*distance)
-                gps_elevation_change_next_meters = end_altitude - start_altitude
-                gps_velocity_east_next_meters_second = 0 if time_diff == 0.0 else AC/time_diff  
-                gps_velocity_north_next_meters_second = 0 if time_diff == 0.0 else BC/time_diff
-                gps_velocity_up_next_meters_second = 0 if time_diff == 0.0 else gps_elevation_change_next_meters/time_diff
-                gps_speed_next_meters_second = 0 if time_diff == 0.0 else distance/time_diff 
-                gps_speed_next_kmeters_second = gps_speed_next_meters_second*1000.0 #in kms
-                gps_heading_next_degrees = compass_bearing
-                gps_pitch_next_degrees = 0 if distance == 0.0 else (gps_elevation_change_next_meters / distance)%360
-                gps_distance_next_meters = distance
-                gps_time_next_seconds = time_diff
+                ext = self.calculateExtensions(
+                    gps, 
+                    (start_time, end_time, gps_epoch_seconds),
+                    (
+                        (start_latitude, start_longitude, start_altitude),
+                        (end_latitude, end_longitude, end_altitude)
+                    ),
+                    1, 1
+                )
             else:
-                #Get metadata from exiftool
-                gps_velocity_east_next_meters_second = 0
-                gps_velocity_north_next_meters_second = 0
-                gps_velocity_up_next_meters_second = 0
-                gps_speed_next_meters_second = 0
-                gps_speed_next_kmeters_second = 0
-                gps_heading_next_degrees = 0
-                gps_elevation_change_next_meters = 0
-                gps_pitch_next_degrees = 0
-                gps_distance_next_meters = 0
-                gps_time_next_seconds = 0
-            ext = {
-                "gps_epoch_seconds": gps_epoch_seconds,
-                "gps_fix_type": gps_fix_type,
-                "gps_vertical_accuracy_meters": gps_vertical_accuracy_meters,
-                "gps_horizontal_accuracy_meters": gps_horizontal_accuracy_meters,
-                "gps_velocity_east_next_meters_second": gps_velocity_east_next_meters_second,
-                "gps_velocity_north_next_meters_second": gps_velocity_north_next_meters_second,
-                "gps_velocity_up_next_meters_second": gps_velocity_up_next_meters_second,
-                "gps_speed_accuracy_meters": gps_speed_accuracy_meters,
-                "gps_speed_next_meters_second": gps_speed_next_meters_second,
-                "gps_heading_next_degrees": gps_heading_next_degrees,
-                "gps_elevation_change_next_meters": gps_elevation_change_next_meters,
-                "gps_pitch_next_degrees": gps_pitch_next_degrees,
-                "gps_distance_next_meters": gps_distance_next_meters,
-                "gps_time_next_seconds": gps_time_next_seconds
-            }
-
+                ext = self.calculateExtensions(
+                    gps, 
+                    (start_time, None, gps_epoch_seconds),
+                    (
+                        (start_latitude, start_longitude, start_altitude),
+                        (None, None, None)
+                    ),
+                    0, 1
+                )
+            del ext["gps_speed_next_kmeters_second"]
             for k, v in ext.items():
                 gpx_extension = ET.fromstring(f"""
                     <{str(k)}>{str(v)}</{str(k)}>
@@ -666,11 +707,8 @@ class TrekViewGoProMp4(TrekviewHelpers):
 
         counter = 0
         photosLen = len(data['images'])
+        t1970 = datetime.datetime.strptime("1970:01:01 00:00:00.000000", "%Y:%m:%d %H:%M:%S.%f")
         for img in data['images']:
-            gps_speed_accuracy_meters = '0.1'
-            gps_fix_type = '3-Dimensional Measurement'
-            gps_vertical_accuracy_meters = '0.1'
-            gps_horizontal_accuracy_meters = '0.1'
             if counter < photosLen - 1:
                 photo = [data['images'][counter], data['images'][counter + 1]]
                 #Get metadata from exiftool
@@ -685,59 +723,45 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 start_time = datetime.datetime.strptime(start_photo["Main:GPSDateTime"].replace("Z", ""), "%Y:%m:%d %H:%M:%S.%f")
                 end_time = datetime.datetime.strptime(end_photo["Main:GPSDateTime"].replace("Z", ""), "%Y:%m:%d %H:%M:%S.%f")
                 time_diff = (end_time - start_time).total_seconds()
+                gps_epoch_seconds = (start_time-t1970).total_seconds()
 
                 #Get Latitude, Longitude and Altitude
                 start_latitude = self.latLngToDecimal(start_photo["Main:GPSLatitude"])
                 start_longitude = self.latLngToDecimal(start_photo["Main:GPSLongitude"])
                 start_altitude = self.getAltitudeFloat(start_photo["Main:GPSAltitude"])
-
                 end_latitude = self.latLngToDecimal(end_photo["Main:GPSLatitude"])
                 end_longitude = self.latLngToDecimal(end_photo["Main:GPSLongitude"])
                 end_altitude = self.getAltitudeFloat(end_photo["Main:GPSAltitude"])
 
-                #Find Haversine Distance
-                distance = haversine((start_latitude, start_longitude), (end_latitude, end_longitude), Unit.METERS)
-
-                #Find Bearing
-                brng = Geodesic.WGS84.Inverse(start_latitude, start_longitude, end_latitude, end_longitude)
-                azimuth1 = (brng['azi1'] + 360) % 360
-                azimuth2 = (brng['azi2'] + 360) % 360
-                
-                compass_bearing = azimuth2
-
-                #Create Metada Fields
-                AC = (math.cos(math.radians(azimuth1))*distance)
-                BC = (math.sin(math.radians(azimuth2))*distance)
-                gps_elevation_change_next_meters = end_altitude - start_altitude
-                gps_velocity_east_next_meters_second = 0 if time_diff == 0.0 else AC/time_diff  
-                gps_velocity_north_next_meters_second = 0 if time_diff == 0.0 else BC/time_diff
-                gps_velocity_up_next_meters_second = 0 if time_diff == 0.0 else gps_elevation_change_next_meters/time_diff
-                gps_speed_next_meters_second = 0 if time_diff == 0.0 else distance/time_diff 
-                gps_speed_next_kmeters_second = gps_speed_next_meters_second*1000.0 #in kms
-                gps_heading_next_degrees = compass_bearing
-                gps_pitch_next_degrees = 0 if distance == 0.0 else (gps_elevation_change_next_meters / distance)%360
-                gps_distance_next_meters = distance
-                gps_time_next_seconds = time_diff
+                ext = self.calculateExtensions(
+                    start_photo, 
+                    (start_time, end_time, gps_epoch_seconds),
+                    (
+                        (start_latitude, start_longitude, start_altitude),
+                        (end_latitude, end_longitude, end_altitude)
+                    ),
+                    1, 0
+                )
             else:
                 photo = [data['images'][counter], None]
                 #Get metadata from exiftool
                 cmd = ["-ee", "-G3", "-j", "-api", "LargeFileSupport=1", self.__config["imageFolderPath"]+os.sep+photo[0]]
                 output = self._exiftool(cmd)
-                start_photo = json.loads(output["output"])
-                gps_velocity_east_next_meters_second = 0
-                gps_velocity_north_next_meters_second = 0
-                gps_velocity_up_next_meters_second = 0
-                gps_speed_next_meters_second = 0
-                gps_speed_next_kmeters_second = gps_speed_next_meters_second #in kms
-                gps_heading_next_degrees = 0
-                gps_elevation_change_next_meters = 0
-                gps_pitch_next_degrees = 0
-                gps_distance_next_meters = 0
-                gps_time_next_seconds = 0
+                start_photo = json.loads(output["output"])[0]
 
-            t1970 = datetime.datetime.strptime("1970:01:01 00:00:00.000000", "%Y:%m:%d %H:%M:%S.%f")
-            gps_epoch_seconds = (start_time-t1970).total_seconds()
+                #Get Times from metadata
+                start_time = datetime.datetime.strptime(start_photo["Main:GPSDateTime"].replace("Z", ""), "%Y:%m:%d %H:%M:%S.%f")
+                gps_epoch_seconds = (start_time-t1970).total_seconds()
 
+                ext = self.calculateExtensions(
+                    start_photo, 
+                    (start_time, None, gps_epoch_seconds),
+                    (
+                        (start_latitude, start_longitude, start_altitude),
+                        (None, None, None)
+                    ),
+                    0, 0
+                )
             gpx_point = gpxpy.gpx.GPXTrackPoint(
                 latitude=start_latitude, 
                 longitude=start_longitude, 
@@ -745,35 +769,19 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 elevation=start_altitude
             )
             gpx_segment.points.append(gpx_point)
-            ext = {
-                "gps_epoch_seconds": gps_epoch_seconds,
-                "gps_fix_type": gps_fix_type,
-                "gps_vertical_accuracy_meters": gps_vertical_accuracy_meters,
-                "gps_horizontal_accuracy_meters": gps_horizontal_accuracy_meters,
-                "gps_velocity_east_next_meters_second": gps_velocity_east_next_meters_second,
-                "gps_velocity_north_next_meters_second": gps_velocity_north_next_meters_second,
-                "gps_velocity_up_next_meters_second": gps_velocity_up_next_meters_second,
-                "gps_speed_accuracy_meters": gps_speed_accuracy_meters,
-                "gps_speed_next_meters_second": gps_speed_next_meters_second,
-                "gps_heading_next_degrees": gps_heading_next_degrees,
-                "gps_elevation_change_next_meters": gps_elevation_change_next_meters,
-                "gps_pitch_next_degrees": gps_pitch_next_degrees,
-                "gps_distance_next_meters": gps_distance_next_meters,
-                "gps_time_next_seconds": gps_time_next_seconds
-            }
-
+            kms = ext["gps_speed_next_kmeters_second"]
+            del ext["gps_speed_next_kmeters_second"]
             for k, v in ext.items():
                 gpx_extension = ET.fromstring(f"""
                     <{str(k)}>{str(v)}</{str(k)}>
                 """)
                 gpx_point.extensions.append(gpx_extension)
-
             cmdMetaData = [
-                '-GPSSpeed={}'.format(gps_speed_next_kmeters_second),
+                '-GPSSpeed={}'.format(kms),
                 '-GPSSpeedRef=k',
-                '-GPSImgDirection={}'.format(gps_heading_next_degrees),
+                '-GPSImgDirection={}'.format(ext['gps_heading_next_degrees']),
                 '-GPSImgDirectionRef=m',
-                '-GPSPitch={}'.format(gps_pitch_next_degrees),
+                '-GPSPitch={}'.format(ext['gps_pitch_next_degrees']),
                 '-IFD0:Model="{}"'.format(self.removeEntities(data["video_field_data"]["DeviceName"]))
             ]
             if data["video_field_data"]["ProjectionType"] == "equirectangular":
@@ -793,10 +801,8 @@ class TrekViewGoProMp4(TrekviewHelpers):
             counter = counter + 1
             print("Injecting additional metadata to {} is done.".format(photo[0]))
         gpxData = gpx.to_xml()
-
         gpxFileName = self.__config["imageFolder"] + "_photos.gpx"
         gpxFileName = self.__saveXmlMetaFile(gpxFileName, gpxData)
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
