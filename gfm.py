@@ -36,6 +36,14 @@ class TrekviewHelpers():
         #print("\nalt: {} {} \n".format(alt, altitude.split(" ")[0]))
         return alt
 
+    def calculateBearing(self, lat1, long1, lat2, long2):
+        Long = (long2-long1)
+        y = math.sin(Long) * math.cos(lat2)
+        x = math.cos(lat1)*math.sin(lat2) - math.sin(lat1)*math.cos(lat2)*math.cos(Long)
+        brng = math.degrees((math.atan2(y, x)))
+        brng = (((brng + 360) % 360))
+        return brng
+
     def __subprocess(self, command, sh=0, capture_output=True):
         ret = None
         try:
@@ -539,8 +547,10 @@ class TrekViewGoProMp4(TrekviewHelpers):
 
                 #Find Bearing
                 brng = Geodesic.WGS84.Inverse(start_latitude, start_longitude, end_latitude, end_longitude)
-                azimuth1 = math.radians(brng['azi1'])
-                azimuth2 = math.radians(brng['azi2'])
+                azimuth1 = (brng['azi1'] + 360) % 360
+                azimuth2 = (brng['azi2'] + 360) % 360
+                
+                compass_bearing = azimuth2
 
                 #Create Metada Fields
                 AC = (math.cos(math.radians(azimuth1))*distance)
@@ -550,9 +560,9 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 gps_velocity_up_next_meters_second = 0 if AC == 0 else BC/AC
                 gps_speed_next_meters_second = 0 if time_diff == 0.0 else distance/time_diff 
                 gps_speed_next_kmeters_second = gps_speed_next_meters_second*1000.0 #in kms
-                gps_azimuth_next_degrees = azimuth1%360
+                gps_azimuth_next_degrees = compass_bearing
                 pitch_default = -90 if (end_altitude - start_altitude) < 0 else 90
-                gps_pitch_next_degrees = pitch_default if distance == 0.0 else (end_altitude - start_altitude) / distance
+                gps_pitch_next_degrees = pitch_default if distance == 0.0 else ((end_altitude - start_altitude) / distance)%360
                 gps_distance_next_meters = distance
                 gps_time_next_seconds = time_diff
             else:
@@ -684,9 +694,11 @@ class TrekViewGoProMp4(TrekviewHelpers):
 
                 #Find Bearing
                 brng = Geodesic.WGS84.Inverse(start_latitude, start_longitude, end_latitude, end_longitude)
-                azimuth1 = math.radians(brng['azi1'])
-                azimuth2 = math.radians(brng['azi2'])
+                azimuth1 = (brng['azi1'] + 360) % 360
+                azimuth2 = (brng['azi2'] + 360) % 360
                 
+                compass_bearing = azimuth2
+
                 #Create Metada Fields
                 AC = (math.cos(math.radians(azimuth1))*distance)
                 BC = (math.sin(math.radians(azimuth2))*distance)
@@ -695,9 +707,9 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 gps_velocity_up_next_meters_second = 0 if AC == 0 else BC/AC
                 gps_speed_next_meters_second = 0 if time_diff == 0.0 else distance/time_diff 
                 gps_speed_next_kmeters_second = gps_speed_next_meters_second*1000.0 #in kms
-                gps_azimuth_next_degrees = azimuth1%360
+                gps_azimuth_next_degrees = compass_bearing
                 pitch_default = -90 if (end_altitude - start_altitude) < 0 else 90
-                gps_pitch_next_degrees = pitch_default if distance == 0.0 else (end_altitude - start_altitude) / distance
+                gps_pitch_next_degrees = pitch_default if distance == 0.0 else ((end_altitude - start_altitude) / distance)%360
                 gps_distance_next_meters = distance
                 gps_time_next_seconds = time_diff
             else:
