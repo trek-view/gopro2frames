@@ -159,7 +159,7 @@ https://github.com/trek-view/FFmpeg
 If the file is .360 fileformat, it must be
 
 ```
-ffmpeg -hwaccel auto -hwaccel auto -init_hw_device opencl:0.2 -filter_hw_device opencl0 -v verbose -filter_complex '[0:0]format=yuv420p,hwupload[a] , [0:4]format=yuv420p,hwupload[b], [a][b]gopromax_opencl, hwdownload,format=yuv420p' -i in.360 -c:v libx264 -map_metadata -map 0:3 0 out.mp4
+ffmpeg -hwaccel cuda -i <input.360> -init_hw_device opencl0:0 -filter_hw_device opencl0 -v info -filter_complex [0:0]format=‘yuv420p’,hwupload[a], [0:5]format=‘yuv420p’,hwupload[b], [a][b]gopromax_opencl,hwdownload,format=‘yuv420p’, -c:v hevc_nvenc -preset slow -b:v 50M -maxrate:v 60M -map_metadata 0 -map 0:3 <output.mp4>
 ```
 
 We only map the gps (gpmd) telemetry track into the video (because .360 video track data is different resolution). Note, this might be either track2 (in case of timewarp) (-map 0:2) or track3 -map 0:3), etc. You can correct check track where gpmd is defined
@@ -168,7 +168,15 @@ We only map the gps (gpmd) telemetry track into the video (because .360 video tr
 <TrackN:MetaFormat>gpmd</TrackN:MetaFormat>
 ```
 
-Where in.360 is input, and out.mp4 is mp4 file with same filename as .360 version.
+To ensure it is processed at step 2 correctly, we also add following metadata tags to the outputted mp4
+
+<table class="tableizer-table">
+<thead><tr class="tableizer-firstrow"><th>Video metadata field extracted</th><th>Example injected</th></tr></thead><tbody>
+ <tr><td>XMP-GSpherical:StitchingSoftware</td><td>Spherical Metadata Tool</td></tr>
+ <tr><td>XMP-GSpherical:ProjectionType</td><td>equirectangular</td></tr>
+</tbody></table>
+
+This is done using: https://github.com/google/spatial-media/tree/master/spatialmedia
 
 ### Step 2: Extract video metadata
 
@@ -290,37 +298,8 @@ The following entries are also created in the gpx file:
   <tr><td>Pitch</td><td>gps_pitch_next</td><td>degrees</td><td>Calculated using GPS alt position between this an next photo. For last position, is always 0.</td></tr>
  <tr><td>Distance Meters</td><td>gps_distance_next</td><td>meters</td><td>Calculated using GPS lat,lon position between this an next photo. For last position, is always 0.</td></tr>
  <tr><td>Distance Time</td><td>gps_time_next</td><td>seconds</td><td>Calculated using GPS lat,lon position between this an next photo. For last position, is always 0.</td></tr>
+ <tr><td>Elevation change</td><td>gps_elevation_change_next</td><td>meters</td><td>Calculated using GPS elevation position between this an next photo. For last position, is always 0.</td></tr>
 </tbody></table>
-
-They are reported in the gpx like so:
-
-```
-<trkseg>
-	<trkpt lat="51.27254444444444" lon="-0.8459694444444444">
-		<ele>82.008</ele>
-		<time>2021-09-04T07:24:07.744000Z</time>
-		<extensions>
-			<gps_epoch>X</gps_epoch>
-			<gps_fix_type>X</gps_fix_type>
-			<gps_vertical_accuracy>X</gps_vertical_accuracy>
-			<gps_horizontal_accuracy>X</gps_horizontal_accuracy>
-			<gps_velocity_east_next>X</gps_velocity_east_next>
-			<gps_velocity_north_next>X</gps_velocity_north_next>
-			<gps_velocity_up_next>X</gps_velocity_up_next>
-			<gps_speed_accuracy>1</gps_speed_accuracy>
-			<gps_speed_next/>X</gps_speed_next/>
-			<gps_azimuth_next>X</gps_azimuth_next>
-			<gps_pitch_next>X</gps_pitch_next>
-			<gps_distance_next>X</gps_distance_next>
-			<gps_time_next>X</gps_time_next>
-		</extensions>
-		</xsd:sequence>
-	</trkpt>
-	<trkpt...
-      ...
-</trkseg>
-
-```
 
 ### Step 7: Setting the photo GPS
 
