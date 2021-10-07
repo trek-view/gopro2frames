@@ -36,7 +36,7 @@ pitch(θ) = tan(θ) = opposite / adjacent
 
 We have the adjacent measurement (gps_distance_meters_next), and the opposite value (gps_elevation_change_meters_next).
 
-Occasionally GPS lat/lon in points is identical, but elevation might change. In this case we default to write pitch as -90 (looking down) or +90 (looking up) depending on if elevation change is positive or negative. This only happens if distance = 0 and elevation change is >0 or <0
+Occasionally GPS lat/lon in points is identical, but elevation might change. In this case we default to write pitch as 0. This only happens if distance = 0.
 
 Output is in degrees between -90 and 90
 
