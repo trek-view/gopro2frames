@@ -4,40 +4,44 @@ Converts GoPro mp4s with equirectangular projections into single frames with cor
 
 ## Installation
 
+You must have:
+
+* ffmpeg
+    * we bind to default path, so test by running `ffmpeg` in your cli
+* exiftool
+    * we bind to default path, so test by running `exiftool` in your cli
+
+Installed on you system.
+
+You can then install the required Trek View components:
+
+This repo:
+
 ```
 git clone https://github.com/trek-view/gopro-frame-maker
 cd gopro-frame-maker
-python3 -m venv env
-source env/bin/activate
-pip3 install -r requirements.txt
-```
-To use Custom FFmpeg after cloning from the repo run following commands:
-
-```
-git clone https://github.com/trek-view/FFmpeg
-cd FFmpeg
-./configure
-make
 ```
 
-_Note: on some MacOS machines, you might need to install YASM before running the `./configure` command: `brew install yasm`._
+If you plan to use .360 videos with this script, you must clone our MAX2Sphere script
 
-Wait for it to build (this might take some time) and then go back to your main directory
+```
+git clone https://github.com/trek-view/MAX2Sphere
+cd MAX2Sphere
+make -f Makefile
+```
+
+Wait for it to build and then go back to your main directory
 
 ```
 cd ..
 ```
 
-Now you can run gfm.py, by default the path of the custom ffmpeg just installed is ./FFmpeg/ffmpeg so you only need to run:
+To keep things clean on your system, run it in a virtual environment:
 
 ```
-python3 gfm.py ./mp4file
-```
-
-but if you install in a custom way, the path to ffmpeg can be changed by passing the `-f` flag with the ffmpeg path in the command-line argument:
-
-```
-python3 gfm.py -f ./path-to-your-ffmpeg-directory/ffmpeg ./mp4file
+python3 -m venv env
+source env/bin/activate
+pip3 install -r requirements.txt
 ```
 
 ## Usage
@@ -154,35 +158,46 @@ This script utilises a custom version of ffmpeg:
 
 https://github.com/trek-view/FFmpeg
 
-### Step 1: Convert .360 (only .360 file format)
+### Step 1: Convert .360 (only if .360 file format)
 
-If the file is .360 fileformat, it must be
+If the file is .360 fileformat, we must process it into an mp4 video first by:
 
-```
-ffmpeg -hwaccel cuda -i <input.360> -init_hw_device opencl0:0 -filter_hw_device opencl0 -v info -filter_complex [0:0]format=‘yuv420p’,hwupload[a], [0:5]format=‘yuv420p’,hwupload[b], [a][b]gopromax_opencl,hwdownload,format=‘yuv420p’, -c:v hevc_nvenc -preset slow -b:v 50M -maxrate:v 60M -map_metadata 0 -map 0:3 <output.mp4>
-```
-
-We only map the gps (gpmd) telemetry track into the video (because .360 video track data is different resolution). Note, this might be either track2 (in case of timewarp) (-map 0:2) or track3 -map 0:3), etc. You can correct check track where gpmd is defined
+**Extract meta**
 
 ```
-<TrackN:MetaFormat>gpmd</TrackN:MetaFormat>
+exiftool -ee -G3 -api LargeFileSupport=1 -X VIDEO.mp4 > VIDEO_META.xml
 ```
 
-To ensure it is processed at step 2 correctly, we also add following metadata tags to the outputted mp4
+**Extract into 2 tracks of frames**
 
-<table class="tableizer-table">
-<thead><tr class="tableizer-firstrow"><th>Video metadata field extracted</th><th>Example injected</th></tr></thead><tbody>
- <tr><td>XMP-GSpherical:StitchingSoftware</td><td>Spherical Metadata Tool</td></tr>
- <tr><td>XMP-GSpherical:ProjectionType</td><td>equirectangular</td></tr>
-</tbody></table>
+```
+ffmpeg -i INPUT.360 -map 0:0 -r 24 -q:v 1 track0/img%d.jpg -map 0:5 -r 1 -q:v 1 track5/img%d.jpg
+```
 
-This is done using: https://github.com/google/spatial-media/tree/master/spatialmedia
+**Merge 2 tracks of frames into one**
+
+```
+@SYSTEM_PATH/MAX2sphere -w XXXX track0/img%d.jpg track5/img%d.jpg
+```
+
+Note, -w flag. If in XML ImageWidth is:
+
+* 4096, then -w = 5376
+* 2272, then -w = 3072
+
+**Create mp4 file from frames**
+
+```
+ffmpeg -i FRAMES/ -c:v libx264 -framerate 24 -pix_fmt yuv420p FILENAME.mp4
+```
 
 ### Step 2: Extract video metadata
 
 ```
 exiftool -ee -G3 -api LargeFileSupport=1 -X VIDEO.mp4 > VIDEO_META.xml
 ```
+
+Note: if .360 we already have this from step 1.
 
 ### Step 3: Extract frames
 
@@ -358,7 +373,7 @@ Now we can use the photo gpx file to assign the following values"
  <tr><td>Trackn:DeviceName</td><td>GoPro Max</td><td>IFD0:Model</td><td>GoPro Max</td></tr>
 </tbody></table>
 
-### Spherical metadata (equirectangular videos only)
+### Spherical metadata (.360 input and equirectangular videos only)
 
 <table class="tableizer-table">
 <thead><tr class="tableizer-firstrow"><th>Video metadata field extracted</th><th>Example extracted</th><th>Image metadata field injected</th><th>Example injected</th></tr></thead><tbody>
