@@ -152,7 +152,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
         startTime = videoData['startTime']
         icounter = 0
         if len(videoData['images']) > 0:
-            print('\nStarting to geotag all the images.\n')
+            print('\nStarting to geotag all the images...\n')
             for img in videoData['images']:
                 GPSDateTime = datetime.datetime.strftime(startTime, "%Y:%m:%d %H:%M:%S.%f")
                 tt = GPSDateTime.split(".")
@@ -525,8 +525,9 @@ class TrekViewGoProMp4(TrekviewHelpers):
 
                 #Get Times from metadata
                 start_time = Timestamps[icounter]["GPSDateTime"]
-                end_time = Timestamps[icounter]["GPSDateTime"]
+                end_time = Timestamps[icounter+1]["GPSDateTime"]
                 time_diff = (end_time - start_time).total_seconds()
+                print(start_time, end_time, time_diff)
 
                 #Get Latitude, Longitude and Altitude
                 start_latitude = self.latLngToDecimal(gps["GPSLatitude"])
@@ -563,9 +564,9 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 gps_velocity_up_next_meters_second = 0 if AC == 0 else BC/AC
                 gps_speed_next_meters_second = 0 if time_diff == 0.0 else distance/time_diff 
                 gps_speed_next_kmeters_second = gps_speed_next_meters_second*1000.0 #in kms
-                gps_azimuth_next_degrees = compass_bearing
-                pitch_default = -90 if (end_altitude - start_altitude) < 0 else 90
-                gps_pitch_next_degrees = pitch_default if distance == 0.0 else ((end_altitude - start_altitude) / distance)%360
+                gps_heading_next_degrees = compass_bearing
+                gps_elevation_change_next_meters = end_altitude - start_altitude
+                gps_pitch_next_degrees = 0 if distance == 0.0 else (gps_elevation_change_next_meters / distance)%360
                 gps_distance_next_meters = distance
                 gps_time_next_seconds = time_diff
             else:
@@ -575,7 +576,8 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 gps_velocity_up_next_meters_second = 0
                 gps_speed_next_meters_second = 0
                 gps_speed_next_kmeters_second = 0
-                gps_azimuth_next_degrees = 0
+                gps_heading_next_degrees = 0
+                gps_elevation_change_next_meters = 0
                 gps_pitch_next_degrees = 0
                 gps_distance_next_meters = 0
                 gps_time_next_seconds = 0
@@ -589,7 +591,8 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 "gps_velocity_up_next_meters_second": gps_velocity_up_next_meters_second,
                 "gps_speed_accuracy_meters": gps_speed_accuracy_meters,
                 "gps_speed_next_meters_second": gps_speed_next_meters_second,
-                "gps_azimuth_next_degrees": gps_azimuth_next_degrees,
+                "gps_heading_next_degrees": gps_heading_next_degrees,
+                "gps_elevation_change_next_meters": gps_elevation_change_next_meters,
                 "gps_pitch_next_degrees": gps_pitch_next_degrees,
                 "gps_distance_next_meters": gps_distance_next_meters,
                 "gps_time_next_seconds": gps_time_next_seconds
@@ -710,9 +713,9 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 gps_velocity_up_next_meters_second = 0 if AC == 0 else BC/AC
                 gps_speed_next_meters_second = 0 if time_diff == 0.0 else distance/time_diff 
                 gps_speed_next_kmeters_second = gps_speed_next_meters_second*1000.0 #in kms
-                gps_azimuth_next_degrees = compass_bearing
-                pitch_default = -90 if (end_altitude - start_altitude) < 0 else 90
-                gps_pitch_next_degrees = pitch_default if distance == 0.0 else ((end_altitude - start_altitude) / distance)%360
+                gps_heading_next_degrees = compass_bearing
+                gps_elevation_change_next_meters = end_altitude - start_altitude
+                gps_pitch_next_degrees = 0 if distance == 0.0 else (gps_elevation_change_next_meters / distance)%360
                 gps_distance_next_meters = distance
                 gps_time_next_seconds = time_diff
             else:
@@ -726,7 +729,8 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 gps_velocity_up_next_meters_second = 0
                 gps_speed_next_meters_second = 0
                 gps_speed_next_kmeters_second = gps_speed_next_meters_second #in kms
-                gps_azimuth_next_degrees = 0
+                gps_heading_next_degrees = 0
+                gps_elevation_change_next_meters = 0
                 gps_pitch_next_degrees = 0
                 gps_distance_next_meters = 0
                 gps_time_next_seconds = 0
@@ -751,7 +755,8 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 "gps_velocity_up_next_meters_second": gps_velocity_up_next_meters_second,
                 "gps_speed_accuracy_meters": gps_speed_accuracy_meters,
                 "gps_speed_next_meters_second": gps_speed_next_meters_second,
-                "gps_azimuth_next_degrees": gps_azimuth_next_degrees,
+                "gps_heading_next_degrees": gps_heading_next_degrees,
+                "gps_elevation_change_next_meters": gps_elevation_change_next_meters,
                 "gps_pitch_next_degrees": gps_pitch_next_degrees,
                 "gps_distance_next_meters": gps_distance_next_meters,
                 "gps_time_next_seconds": gps_time_next_seconds
@@ -766,7 +771,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
             cmdMetaData = [
                 '-GPSSpeed={}'.format(gps_speed_next_kmeters_second),
                 '-GPSSpeedRef=k',
-                '-GPSImgDirection={}'.format(gps_azimuth_next_degrees),
+                '-GPSImgDirection={}'.format(gps_heading_next_degrees),
                 '-GPSImgDirectionRef=m',
                 '-GPSPitch={}'.format(gps_pitch_next_degrees),
                 '-IFD0:Model="{}"'.format(self.removeEntities(data["video_field_data"]["DeviceName"]))
