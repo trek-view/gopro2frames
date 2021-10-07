@@ -559,13 +559,13 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 #Create Metada Fields
                 AC = (math.cos(math.radians(azimuth1))*distance)
                 BC = (math.sin(math.radians(azimuth2))*distance)
+                gps_elevation_change_next_meters = end_altitude - start_altitude
                 gps_velocity_east_next_meters_second = 0 if time_diff == 0.0 else AC/time_diff  
                 gps_velocity_north_next_meters_second = 0 if time_diff == 0.0 else BC/time_diff
-                gps_velocity_up_next_meters_second = 0 if AC == 0 else BC/AC
+                gps_velocity_up_next_meters_second = 0 if time_diff == 0.0 else gps_elevation_change_next_meters/time_diff
                 gps_speed_next_meters_second = 0 if time_diff == 0.0 else distance/time_diff 
                 gps_speed_next_kmeters_second = gps_speed_next_meters_second*1000.0 #in kms
                 gps_heading_next_degrees = compass_bearing
-                gps_elevation_change_next_meters = end_altitude - start_altitude
                 gps_pitch_next_degrees = 0 if distance == 0.0 else (gps_elevation_change_next_meters / distance)%360
                 gps_distance_next_meters = distance
                 gps_time_next_seconds = time_diff
@@ -708,13 +708,13 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 #Create Metada Fields
                 AC = (math.cos(math.radians(azimuth1))*distance)
                 BC = (math.sin(math.radians(azimuth2))*distance)
+                gps_elevation_change_next_meters = end_altitude - start_altitude
                 gps_velocity_east_next_meters_second = 0 if time_diff == 0.0 else AC/time_diff  
                 gps_velocity_north_next_meters_second = 0 if time_diff == 0.0 else BC/time_diff
-                gps_velocity_up_next_meters_second = 0 if AC == 0 else BC/AC
+                gps_velocity_up_next_meters_second = 0 if time_diff == 0.0 else gps_elevation_change_next_meters/time_diff
                 gps_speed_next_meters_second = 0 if time_diff == 0.0 else distance/time_diff 
                 gps_speed_next_kmeters_second = gps_speed_next_meters_second*1000.0 #in kms
                 gps_heading_next_degrees = compass_bearing
-                gps_elevation_change_next_meters = end_altitude - start_altitude
                 gps_pitch_next_degrees = 0 if distance == 0.0 else (gps_elevation_change_next_meters / distance)%360
                 gps_distance_next_meters = distance
                 gps_time_next_seconds = time_diff
