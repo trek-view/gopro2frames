@@ -170,8 +170,10 @@ exiftool -ee -G3 -api LargeFileSupport=1 -X VIDEO.mp4 > VIDEO_META.xml
 **Extract into 2 tracks of frames**
 
 ```
-ffmpeg -i INPUT.360 -map 0:0 -r 24 -q:v 1 track0/img%d.jpg -map 0:5 -r 1 -q:v 1 track5/img%d.jpg
+ffmpeg -i INPUT.360 -map 0:0 -r XXX -q:v QQQ track0/img%d.jpg -map 0:5 -r 1 -q:v 1 track5/img%d.jpg
 ```
+
+Where XXX = framerate user passes in CLI. And QQQ = quality.
 
 **Merge 2 tracks of frames into one**
 
