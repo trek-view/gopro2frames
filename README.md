@@ -172,10 +172,22 @@ exiftool -ee -G3 -api LargeFileSupport=1 -X VIDEO.mp4 > VIDEO_META.xml
 **Extract into 2 tracks of frames**
 
 ```
-ffmpeg -i INPUT.360 -map 0:0 -r XXX -q:v QQQ track0/img%d.jpg -map 0:5 -r XXX -q:v QQQ track5/img%d.jpg
+ffmpeg -i INPUT.360 -map 0:0 -r XXX -q:v QQQ trackN/img%d.jpg -map 0:5 -r XXX -q:v QQQ trackN/img%d.jpg
 ```
 
 Where `XXX` = framerate user passes in CLI. And `QQQ` = quality.
+
+The two TrackN can be identified in the video metadata with the two tracks that contain CompressorName=GoPro H.265 encoder
+
+E.g.
+
+```
+<Track1:CompressorName>GoPro H.265 encoder</Track1:CompressorName>
+<Track6:CompressorName>GoPro H.265 encoder</Track6:CompressorName>
+```
+
+Means track0 (`-map 0:5`) and track5 (`-map 0:5`) contain the video.
+
 
 **Merge 2 tracks of frames into one**
 
