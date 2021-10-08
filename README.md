@@ -184,12 +184,6 @@ Note, -w flag. If in XML ImageWidth is:
 * 4096, then -w = 5376
 * 2272, then -w = 3072
 
-**Create mp4 file from frames**
-
-```
-ffmpeg -i FRAMES/ -c:v libx264 -framerate 24 -pix_fmt yuv420p FILENAME.mp4
-```
-
 ### Step 2: Extract video metadata
 
 ```
