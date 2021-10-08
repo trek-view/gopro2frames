@@ -138,6 +138,18 @@ $ python3 gfm.py -q 5 GS018422.mp4
 $ python3 gfm.py -t 5x GS018422.mp4
 ```
 
+##### Use a custom ffmpeg path
+
+```
+python3 gfm.py -f /Users/dgreenwood/bin/ffmpeg GS018422.mp4
+```
+
+##### Use a custom MAX2Sphere path
+
+```
+python3 gfm.py -m /Users/dgreenwood/bin/MAX2sphere/MAX2sphere GS018422.mp4
+```
+
 ## How it works
 
 The following describes how the script works.
