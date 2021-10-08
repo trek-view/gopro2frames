@@ -427,7 +427,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
             imgCounter = 0
             for img in t0Images:
                 if imgCounter < len(t5Images):
-                    print("Converting 360 image '{}' to euirectangular".format(img))
+                    print("Converting 360 image '{}' to equirectangular".format(img))
                     cmd = [max_sphere, '-w', _w, "track0/{}".format(img), "track5/{}".format(img)]
                     cmd = shlex.split(" ".join(cmd))
                     output = subprocess.run(cmd, capture_output=True)
