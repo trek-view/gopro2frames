@@ -380,7 +380,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
         else:
             trackmapFirst = "0:{}".format(0)
             trackmapSecond = "0:{}".format(5)
-        
+
         track0 = os.getcwd() + os.sep + 'track0'
         if os.path.exists(track0):
             shutil.rmtree(track0)
@@ -441,7 +441,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
                     if output.returncode == 0:
                         #iMG = int(img.replace("_sphere", "").replace("img", "").replace(".jpg", ""))
                         iMG = imgCounter+1
-                        Path(track0+os.sep+img).rename(self.__config["imageFolderPath"]+os.sep+"{0}_{1:06d}.jpg".format(self.__config["imageFolder"], iMG))
+                        Path(track0+os.sep+img.replace(".jpg", "_sphere.jpg")).rename(self.__config["imageFolderPath"]+os.sep+"{0}_{1:06d}.jpg".format(self.__config["imageFolder"], iMG))
                     else:
                         raise Exception(output.stderr.decode('utf-8',"ignore"))
                 imgCounter = imgCounter + 1
