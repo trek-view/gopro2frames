@@ -109,6 +109,8 @@ Options:
 	* `15x`
 	* `30x`
 * -d enable debug mode, default: false. If flag is passed, will be set to true.
+* -m custom MAX2Sphere path, default: ./MAX2sphere/MAX2sphere
+* -f custom ffmpeg install path, default: default binding
 
 #### Examples (MacOS)
 
@@ -157,7 +159,7 @@ This script utilises a custom version of ffmpeg:
 
 https://github.com/trek-view/FFmpeg
 
-### Step 1: Convert .360 (only if .360 file format)
+### Step 1A: Convert .360 (only if .360 file format)
 
 If the file is .360 fileformat, we must process it into an mp4 video first by:
 
@@ -170,10 +172,10 @@ exiftool -ee -G3 -api LargeFileSupport=1 -X VIDEO.mp4 > VIDEO_META.xml
 **Extract into 2 tracks of frames**
 
 ```
-ffmpeg -i INPUT.360 -map 0:0 -r XXX -q:v QQQ track0/img%d.jpg -map 0:5 -r 1 -q:v 1 track5/img%d.jpg
+ffmpeg -i INPUT.360 -map 0:0 -r XXX -q:v QQQ track0/img%d.jpg -map 0:5 -r XXX -q:v QQQ track5/img%d.jpg
 ```
 
-Where XXX = framerate user passes in CLI. And QQQ = quality.
+Where `XXX` = framerate user passes in CLI. And `QQQ` = quality.
 
 **Merge 2 tracks of frames into one**
 
@@ -186,7 +188,7 @@ Note, -w flag. If in XML ImageWidth is:
 * 4096, then -w = 5376
 * 2272, then -w = 3072
 
-### Step 2: Extract video metadata
+### Step 1B: Extract video metadata (only if .mp4 file format)
 
 ```
 exiftool -ee -G3 -api LargeFileSupport=1 -X VIDEO.mp4 > VIDEO_META.xml
@@ -194,7 +196,7 @@ exiftool -ee -G3 -api LargeFileSupport=1 -X VIDEO.mp4 > VIDEO_META.xml
 
 Note: if .360 we already have this from step 1.
 
-### Step 3: Extract frames
+### Step 2: Extract frames
 
 For mp4
 
@@ -204,7 +206,7 @@ ffmpeg -i VIDEO.mp4 -r 5 -q:v 1 img%d.jpg
 
 Where -r is framerate (FPS) and -q:v is quality (1 being the highest).
 
-### Step 4: Setting the frame (photo) times
+### Step 3: Setting the frame (photo) times
 
 #### First frame (all modes)
 
@@ -253,7 +255,7 @@ We therefore explicitly ask use if video was shot in timewarp mode and the setti
 
 To give an example, lets say first photo gets assigned first GPS time = 00:00:01.000 and we extract photos at 5FPS for timewarp mode 30x. in this case second photo has time 00:00:01.000 +6 secs.
 
-### Step 5: Calculating GPS
+### Step 4: Calculating GPS
 
 GoPro reports telemetry at different time intervals, and not every GPS position recorded has a time.
 
@@ -289,7 +291,7 @@ There files are written into a GPX file.
 
 ```
 
-### Step 6: Calculating additional telemetry
+### Step 5: Calculating additional telemetry
 
 The following entries are also created in the gpx file:
 
@@ -311,7 +313,7 @@ The following entries are also created in the gpx file:
  <tr><td>Elevation change</td><td>gps_elevation_change_next</td><td>meters</td><td>Calculated using GPS elevation position between this an next photo. For last position, is always 0.</td></tr>
 </tbody></table>
 
-### Step 7: Setting the photo GPS
+### Step 6: Setting the photo GPS
 
 Now we can use the photo time and GPS positions / times to geotag the photos:
 
@@ -338,7 +340,7 @@ This will write the following fields into the photos
  <tr><td>GPS:GPSAltitude</td><td>157.641 m</td></tr>
 </tbody></table>
 
-### Step 8: Create photo GPX
+### Step 7: Create photo GPX
 
 This is identical to step 4, however, the new GPS values from exiftool are used for calculations. This means the number of gps points in the gpx matches the number of photos. In the case of the following fixed fields, the values should be set as follows:
 
@@ -347,7 +349,7 @@ This is identical to step 4, however, the new GPS values from exiftool are used 
 * gps_horizontal_accuracy = 0.1
 * gps_speed_accuracy = 0.1
 			
-### Step 9: Write additional metadata to photo
+### Step 8: Write additional metadata to photo
 
 #### GPX fields
 
@@ -386,7 +388,7 @@ Now we can use the photo gpx file to assign the following values"
 
 Note, some spatial fields are always fixed (e.g. XMP-GPano:SourcePhotosCount b/c GoPro 360 cameras only have 2 lenses), so no video metadata field needs to be extracted and injected.
 
-### Step 10: Done
+### Step 9: Done
 
 You now have:
 
