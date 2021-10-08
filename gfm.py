@@ -223,7 +223,10 @@ class TrekViewGoProMp4(TrekviewHelpers):
         fileType = self.__validateVideo(videoData["video_field_data"])
         if fileType == "360":
             self.__config["fileType"] = '360'
-            filename = self.__convert360tomp4()
+            filename = self.__convert360tomp4(videoData)
+            check = self._checkFileExists(filename)
+            if check == False:
+                exit("{} does not exists. Unable to create MP4 video.".format(filename))
             self.__config["360file"] = filename
             self.__breakIntoFrames(filename)
         else:
@@ -360,49 +363,82 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 if videoData["CompressorName"] == "H.265":
                     logging.critical("This does not appear to be a GoPro .360 file. Please use the .360 video created from your GoPro camera only.")
                     exit("This does not appear to be a GoPro .360 file. Please use the .360 video created from your GoPro camera only.")
-        if videoData["FileType"].strip() == '360':
+        vFileType = os.path.basename(self.__config["args"].input.strip()).split(".")[-1]
+        if vFileType == '360':
             StitchingSoftwares = ["Fusion Studio / GStreamer", "Spherical Metadata Tool"]
             if videoData['StitchingSoftware'].strip() not in StitchingSoftwares:
                 logging.critical("Only mp4's stitched using GoPro software are supported. Please use GoPro software to stitch your GoPro 360 videos.")
                 exit("Only mp4's stitched using GoPro software are supported. Please use GoPro software to stitch your GoPro 360 videos.")
-        return videoData["FileType"].strip()
+        return vFileType
     
-    def __convert360tomp4(self):
-        filename = "{}{}{}.mp4".format(os.getcwd(), os.sep, self.__config["imageFolder"])
+    def __convert360tomp4(self, videoData):
+        filename = "{}{}{}.mp4".format(self.__config["imageFolderPath"], os.sep, self.__config["imageFolder"])
         print("Converting 360 video to mp4 video...")
         if self.__config["time_warp"] is None:
             trackmap = '0:3'
         else:
             trackmap = '0:2'
+
+        track0 = os.getcwd() + os.sep + 'track0'
+        if os.path.exists(track0):
+            shutil.rmtree(track0)
+        os.makedirs(track0, exist_ok=True) 
+        track5 = os.getcwd() + os.sep + 'track5'
+        if os.path.exists(track5):
+            shutil.rmtree(track5)
+        os.makedirs(track5, exist_ok=True) 
+
         cmd = [
-            '-hwaccel', 
-            'cuda', 
-            '-i', 
+            "-i",
             self.__config["args"].input,
-            '-init_hw_device',
-            'opencl0:0',
-            '-filter_hw_device', 
-            'opencl0' 
-            '-v',
-            'info',
-            '-filter_complex',
-            "[0:0]format='yuv420p',hwupload[a], [0:5]format='yuv420p',hwupload[b], [a][b]gopromax_opencl,hwdownload,format='yuv420p',",
-            '-c:v', 
-            'hevc_nvenc', 
-            '-preset' ,
-            'slow',
-            '-b:v',
-            '50M', 
-            '-maxrate:v',
-            '60M',
-            '-map_metadata',
-            '0', 
-            '-map',
-            trackmap,
-            '-y',
-            filename
+            "-map", 
+            "0:0",
+            "-r",
+            "24", 
+            "-q:v",
+            "1",
+            track0 + os.sep + "img%d.jpg",
+            "-map", 
+            "0:5?",
+            "-r", 
+            "1",
+            "-q:v", 
+            "1", 
+            track5 + os.sep + "img%d.jpg"
         ]
         output = self._ffmpeg(cmd)
+
+        imgWidth = videoData['video_field_data']['SourceImageWidth']
+        if imgWidth == 4096:
+            _w = 5376
+        elif imgWidth == 2272:
+            _w = 3072
+        else:
+            _w = 5376
+
+        try:
+            cmd = [self.__config["args"].max_shere, '-w', _w, 'track0/img%d.jpg', 'track5/img%d.jpg']
+            cmd = shlex.split(" ".join(cmd))
+            output = subprocess.run(cmd, capture_output=True)
+            logging.info(output)
+            if output.returncode == 0:
+                out = output.stdout.decode('utf-8',"ignore")
+                logging.info(str(out))
+            else:
+                raise Exception(output.stderr.decode('utf-8',"ignore"))
+        except Exception as e:
+            logging.info(str(e))
+            exit("Unable to convert 360 deg video.")
+
+        cmd = [
+            "-i", track5 + os.sep + "img%d.jpg", "-c:v", "libx264", "-framerate", "24", "-pix_fmt", "yuv420p", filename
+        ]
+        output = self._ffmpeg(cmd)
+
+        if os.path.exists(track0):
+            shutil.rmtree(track0)
+        if os.path.exists(track5):
+            shutil.rmtree(track5)
         return filename
 
     def __createDirectories(self):
@@ -810,6 +846,7 @@ if __name__ == '__main__':
     parser.add_argument("-r", "--frame-rate", type=int, help="Sets the frame rate (frames per second) for extraction, default: 5.", default=5)
     parser.add_argument("-t", "--time-warp", type=str, help="Set time warp mode for gopro. available values are 2x, 5x, 10x, 15x, 30x")
     parser.add_argument("-f", "--ffmpeg-path", type=str, help="Set the path for ffmpeg.")
+    parser.add_argument("-m", "--max-shere", type=str, help="Set the path for MAX2sphere binary.")
     parser.add_argument("-q", "--quality", type=int, help="Sets the extracted quality between 2-6. 1 being the highest quality (but slower processing), default: 1. This is value used for ffmpeg -q:v flag. ", default=1)
     parser.add_argument("-d", "--debug", action='store_true', help="Enable debug mode, default: off.")
     args = parser.parse_args()
