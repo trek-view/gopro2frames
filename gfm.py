@@ -360,21 +360,27 @@ class TrekViewGoProMp4(TrekviewHelpers):
                     logging.critical("This does not appear to be a GoPro .360 file. Please use the .360 video created from your GoPro camera only.")
                     exit("This does not appear to be a GoPro .360 file. Please use the .360 video created from your GoPro camera only.")
         vFileType = os.path.basename(self.__config["args"].input.strip()).split(".")[-1]
-        if vFileType == '3600':
+        """if vFileType == '360':
             StitchingSoftwares = ["Fusion Studio / GStreamer", "Spherical Metadata Tool"]
             if videoData['StitchingSoftware'].strip() not in StitchingSoftwares:
                 logging.critical("Only mp4's stitched using GoPro software are supported. Please use GoPro software to stitch your GoPro 360 videos.")
-                exit("Only mp4's stitched using GoPro software are supported. Please use GoPro software to stitch your GoPro 360 videos.")
+                exit("Only mp4's stitched using GoPro software are supported. Please use GoPro software to stitch your GoPro 360 videos.")"""
         return vFileType
     
     def __convert360tomp4(self, videoData):
         filename = "{}{}{}.mp4".format(self.__config["imageFolderPath"], os.sep, self.__config["imageFolder"])
         print("Converting 360 video to mp4 video...")
-        if self.__config["time_warp"] is None:
-            trackmap = '0:3'
-        else:
-            trackmap = '0:2'
 
+        tracks = videoData['video_field_data']['CompressorNameTrack']
+        if (type(tracks) == list) and (len(tracks) == 2):
+            tracks[0] = 0 if (tracks[0]-1) < 0 else (tracks[0]-1)
+            tracks[1] = 0 if (tracks[1]-1) < 0 else (tracks[1]-1)
+            trackmapFirst = "0:{}".format(tracks[0])
+            trackmapSecond = "0:{}".format(tracks[1])
+        else:
+            trackmapFirst = "0:{}".format(0)
+            trackmapSecond = "0:{}".format(5)
+        
         track0 = os.getcwd() + os.sep + 'track0'
         if os.path.exists(track0):
             shutil.rmtree(track0)
@@ -388,14 +394,14 @@ class TrekViewGoProMp4(TrekviewHelpers):
             "-i",
             self.__config["args"].input,
             "-map", 
-            "0:0",
+            trackmapFirst,
             "-r",
             str(self.__config["frame_rate"]), 
             "-q:v",
             str(self.__config["quality"]),
             track0 + os.sep + "img%d.jpg",
             "-map", 
-            "0:5",
+            trackmapSecond,
             "-r", 
             str(self.__config["frame_rate"]),
             "-q:v", 
@@ -427,7 +433,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
             imgCounter = 0
             for img in t0Images:
                 if imgCounter < len(t5Images):
-                    print("Converting 360 image '{}' to equirectangular".format(img))
+                    print("Converting 360 image '{}' to euirectangular".format(img))
                     cmd = [max_sphere, '-w', _w, "track0/{}".format(img), "track5/{}".format(img)]
                     cmd = shlex.split(" ".join(cmd))
                     output = subprocess.run(cmd, capture_output=True)
@@ -502,6 +508,8 @@ class TrekViewGoProMp4(TrekviewHelpers):
         videoFieldData['ProjectionType'] = ''
         videoFieldData['StitchingSoftware'] = ''
         videoFieldData['MetaFormat'] = ''
+        videoFieldData['CompressorName'] = ''
+        videoFieldData['CompressorNameTrack'] = []
         nsmap = root[0].nsmap
         anchor = ''
         data = {}
@@ -522,6 +530,12 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 elif tag == 'ProjectionType':
                     if elem.text.strip() == 'equirectangular':
                         videoFieldData[tag] = elem.text.strip()
+                elif tag == 'CompressorName':
+                    if elem.text.strip() == 'GoPro H.265 encoder':
+                        for k, v in nsmap.items():
+                            if v == nm:
+                                videoFieldData['CompressorNameTrack'].append(int(k.replace("Track", "")))
+                                break
                 else:
                     videoFieldData[tag.strip()] = elem.text.strip()
         for elem in root[0]:
@@ -620,7 +634,15 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 #Get Times from metadata
                 start_time = datetime.datetime.strptime(start_gps["GPSDateTime"].replace("Z", ""), "%Y:%m:%d %H:%M:%S.%f")
                 end_time = start_time+datetime.timedelta(0, 1.0) 
+                time_diff = (end_time - start_time).total_seconds()
                 diff = int((time_diff/float(len(start_gps["GPSData"])))*1000.0)
+                #check this later
+                if diff == 0:
+                    if start_time == end_time:
+                        print('####')
+                        start_time = end_time
+                        diff = int((0.05)*1000.0)
+                        end_time = end_time+datetime.timedelta(0, 0.05) 
                 new = pd.date_range(start=start_time, end=end_time, closed='left', freq="{}ms".format(diff))
                 icounter = 0
                 dlLen = 1 if len(start_gps["GPSData"]) < 1 else len(start_gps["GPSData"])
