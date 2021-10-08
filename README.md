@@ -7,9 +7,9 @@ Converts GoPro mp4s with equirectangular projections into single frames with cor
 You must have:
 
 * ffmpeg
-    * we bind to default path, so test by running `ffmpeg` in your cli
+    * by default we bind to default path, so test by running `ffmpeg` in your cli
 * exiftool
-    * we bind to default path, so test by running `exiftool` in your cli
+    * by default we bind to default path, so test by running `exiftool` in your cli
 
 Installed on you system.
 
@@ -18,30 +18,30 @@ You can then install the required Trek View components:
 This repo:
 
 ```
-git clone https://github.com/trek-view/gopro-frame-maker
-cd gopro-frame-maker
+$ git clone https://github.com/trek-view/gopro-frame-maker
+$ cd gopro-frame-maker
 ```
 
 If you plan to use .360 videos with this script, you must clone our MAX2Sphere script
 
 ```
-git clone https://github.com/trek-view/MAX2Sphere
-cd MAX2Sphere
-make -f Makefile
+$ git clone https://github.com/trek-view/MAX2Sphere
+$ cd MAX2Sphere
+$ make -f Makefile
 ```
 
 Wait for it to build and then go back to your main directory
 
 ```
-cd ..
+$ cd ..
 ```
 
 To keep things clean on your system, run it in a virtual environment:
 
 ```
-python3 -m venv env
-source env/bin/activate
-pip3 install -r requirements.txt
+$ python3 -m venv env
+$ source env/bin/activate
+$ pip3 install -r requirements.txt
 ```
 
 ## Usage
@@ -87,7 +87,7 @@ If the script fails any of these checks, you will see an error returned.
 ### Options
 
 ```
-$ gfm.py [options] VIDEO_NAME.mp4
+$ python3 gfm.py [options] VIDEO_NAME.mp4
 ```
 
 Options:
@@ -117,25 +117,25 @@ Options:
 ##### Extract at a frame rate of 1 FPS
 
 ```
-$ gfm.py -r 1 GS018422.mp4
+$ python3 gfm.py -r 1 GS018422.mp4
 ```
 
 ##### Run with debug mode
 
 ```
-$ gfm.py -d GS018422.mp4
+$ python3 gfm.py -d GS018422.mp4
 ```
 
 ##### Extract frames at lowest quality
 
 ```
-$ gfm.py -q 5 GS018422.mp4
+$ python3 gfm.py -q 5 GS018422.mp4
 ```
 
 ##### Extract from a timewarp video shot at 5x speed
 
 ```
-$ gfm.py -t 5x GS018422.mp4
+$ python3 gfm.py -t 5x GS018422.mp4
 ```
 
 ## How it works
