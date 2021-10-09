@@ -242,23 +242,28 @@ Now we can use the photo gpx file to assign the following values"
  <tr><td>Trackn:DeviceName</td><td>GoPro Max</td><td>IFD0:Model</td><td>GoPro Max</td></tr>
 </tbody></table>
 
-### Spherical metadata (.360 input and equirectangular videos only)
+#### Spherical metadata (.360 input and equirectangular videos only)
+
+This step is only for
+
+* .mp4 videos where ProjectionType=equirectangular
+* all .360 videos
 
 <table class="tableizer-table">
-<thead><tr class="tableizer-firstrow"><th>Video metadata field extracted</th><th>Example extracted</th><th>Image metadata field injected</th><th>Example injected</th></tr></thead><tbody>
- <tr><td>XMP-GSpherical:StitchingSoftware</td><td>Spherical Metadata Tool</td><td>XMP-GPano:StitchingSoftware</td><td>Spherical Metadata Tool</td></tr>
- <tr><td>&nbsp;</td><td>&nbsp;</td><td>XMP-GPano:SourcePhotosCount</td><td>2</td></tr>
- <tr><td>&nbsp;</td><td>&nbsp;</td><td>XMP-GPano:UsePanoramaViewer</td><td>TRUE</td></tr>
- <tr><td>XMP-GSpherical:ProjectionType</td><td>equirectangular</td><td>XMP-GPano:ProjectionType</td><td>equirectangular</td></tr>
- <tr><td>Track1:SourceImageHeight</td><td>2688</td><td>XMP-GPano:CroppedAreaImageHeightPixels</td><td>2688</td></tr>
- <tr><td>Track1:SourceImageWidth</td><td>5376</td><td>XMP-GPano:CroppedAreaImageWidthPixels</td><td>5376</td></tr>
- <tr><td>Track1:SourceImageHeight</td><td>2688</td><td>XMP-GPano:FullPanoHeightPixels</td><td>2688</td></tr>
- <tr><td>Track1:SourceImageWidth</td><td>5376</td><td>XMP-GPano:FullPanoWidthPixels</td><td>5376</td></tr>
- <tr><td>&nbsp;</td><td>&nbsp;</td><td>XMP-GPano:CroppedAreaLeftPixels</td><td>0</td></tr>
- <tr><td>&nbsp;</td><td>&nbsp;</td><td>XMP-GPano:CroppedAreaTopPixels</td><td>0</td></tr>
+<thead><tr class="tableizer-firstrow"><th>Value type</th><th>Image metadata field injected</th><th>Example injected</th></tr></thead><tbody>
+ <tr><td>Fixed</td><td>XMP-GPano:StitchingSoftware</td><td>Spherical Metadata Tool</td></tr>
+ <tr><td>Fixed</td><td>XMP-GPano:SourcePhotosCount</td><td>2</td></tr>
+ <tr><td>Fixed</td><td>XMP-GPano:UsePanoramaViewer</td><td>TRUE</td></tr>
+ <tr><td>Fixed</td><td>XMP-GPano:ProjectionType</td><td>equirectangular</td></tr>
+ <tr><td>Is same as ImageHeight value</td><td>XMP-GPano:CroppedAreaImageHeightPixels</td><td>2688</td></tr>
+ <tr><td>Is same as ImageWidth value</td><td>XMP-GPano:CroppedAreaImageWidthPixels</td><td>5376</td></tr>
+ <tr><td>Is same as ImageHeight value</td><td>XMP-GPano:FullPanoHeightPixels</td><td>2688</td></tr>
+ <tr><td>Is same as ImageWidth value</td><td>XMP-GPano:FullPanoWidthPixels</td><td>5376</td></tr>
+ <tr><td>Fixed</td><td>XMP-GPano:CroppedAreaLeftPixels</td><td>0</td></tr>
+ <tr><td>Fixed</td><td>XMP-GPano:CroppedAreaTopPixels</td><td>0</td></tr>
 </tbody></table>
 
-Note, some spatial fields are always fixed (e.g. XMP-GPano:SourcePhotosCount b/c GoPro 360 cameras only have 2 lenses), so no video metadata field needs to be extracted and injected.
+Note, some spatial fields are always fixed (e.g. XMP-GPano:SourcePhotosCount b/c GoPro 360 cameras only have 2 lenses), so values are static.
 
 ### Step 9: Done
 
