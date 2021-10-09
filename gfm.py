@@ -94,11 +94,11 @@ class TrekviewHelpers():
             gps_velocity_east_next_meters_second = 0.0 if time_diff == 0.0 else AC/Decimal(time_diff)  
             gps_velocity_east_next_meters_second = 0.0 if gps_velocity_east_next_meters_second == 0.0 else gps_velocity_east_next_meters_second
             gps_velocity_north_next_meters_second = 0.0 if time_diff == 0.0 else BC/Decimal(time_diff)
-            gps_velocity_north_next_meters_second = 0.0 if gps_velocity_north_next_meters_second == 0.0 else gps_velocity_north_next_meters_second
+            gps_velocity_north_next_meters_second = 0.0 if gps_velocity_north_next_meters_second == 0.0 else round(gps_velocity_north_next_meters_second)
             gps_velocity_up_next_meters_second = 0.0 if time_diff == 0.0 else gps_elevation_change_next_meters/time_diff
-            gps_velocity_up_next_meters_second = 0.0 if gps_velocity_up_next_meters_second == 0.0 else gps_velocity_up_next_meters_second
+            gps_velocity_up_next_meters_second = 0.0 if gps_velocity_up_next_meters_second == 0.0 else round(gps_velocity_up_next_meters_second)
             gps_speed_next_meters_second = 0.0 if time_diff == 0.0 else distance/time_diff 
-            gps_speed_next_meters_second = 0.0 if gps_speed_next_meters_second == 0.0 else gps_speed_next_meters_second
+            gps_speed_next_meters_second = 0.0 if gps_speed_next_meters_second == 0.0 else round(gps_speed_next_meters_second)
             gps_heading_next_degrees = 0 if distance == 0.0 else compass_bearing
             gps_pitch_next_degrees = 0.0 if distance == 0.0 else (gps_elevation_change_next_meters / distance)%360
             gps_distance_next_meters = distance
@@ -248,11 +248,13 @@ class TrekViewGoProMp4(TrekviewHelpers):
             for img in videoData['images']:
                 GPSDateTime = datetime.datetime.strftime(startTime, "%Y:%m:%d %H:%M:%S.%f")
                 tt = GPSDateTime.split(".")
+                tt[1] = tt[1][:3]
                 cmdMetaData = [
                     '-DateTimeOriginal="{0}Z"'.format(GPSDateTime),
                     '-SubSecTimeOriginal="{0}"'.format(tt[1]),
                     '-SubSecDateTimeOriginal="{0}Z"'.format(".".join(tt))
                 ]
+                print(cmdMetaData)
                 cmdMetaData.append('-overwrite_original')
                 cmdMetaData.append("{}{}{}".format(self.__config["imageFolderPath"], os.sep, videoData['images'][icounter]))
                 output = self._exiftool(cmdMetaData)
@@ -448,7 +450,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
             imgCounter = 0
             for img in t0Images:
                 if imgCounter < len(t5Images):
-                    print("Converting 360 image '{}' to euirectangular".format(img))
+                    print("Converting 360 image '{}' to equirectangular".format(img))
                     cmd = [max_sphere, '-w', _w, "track0/{}".format(img), "track5/{}".format(img)]
                     cmd = shlex.split(" ".join(cmd))
                     output = subprocess.run(cmd, capture_output=True)
@@ -870,7 +872,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 cmdMetaData.append('-XMP-GPano:StitchingSoftware="{}"'.format(self.removeEntities(data["video_field_data"]["StitchingSoftware"])))
                 cmdMetaData.append('-XMP-GPano:SourcePhotosCount="{}"'.format(2))
                 cmdMetaData.append('-XMP-GPano:UsePanoramaViewer="{}"'.format("true"))
-                cmdMetaData.append('-XMP-GPano:ProjectionType="{}"'.format(self.removeEntities(data["video_field_data"]["ProjectionType"])))
+                cmdMetaData.append('-XMP-GPano:ProjectionType="equirectangular"')
                 cmdMetaData.append('-XMP-GPano:CroppedAreaImageHeightPixels="{}"'.format(data["video_field_data"]["SourceImageHeight"]))
                 cmdMetaData.append('-XMP-GPano:CroppedAreaImageWidthPixels="{}"'.format(data["video_field_data"]["SourceImageWidth"]))
                 cmdMetaData.append('-XMP-GPano:FullPanoHeightPixels="{}"'.format(data["video_field_data"]["SourceImageHeight"]))
