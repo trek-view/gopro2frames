@@ -10,7 +10,7 @@ import gpxpy
 
 class TrekviewHelpers():
     def __init__(self, config):
-        """"""
+        getcontext().prec = 6
     def getListOfTuples(self, mylist, n):
         args = [iter(mylist)] * n
         return itertools.zip_longest(fillvalue=None, *args)
@@ -82,12 +82,14 @@ class TrekviewHelpers():
             azimuth2 = (brng['azi2'] + 360) % 360
 
             compass_bearing = azimuth2
+
             #Create Metada Fields
             AC = Decimal(math.sin(math.radians(azimuth1))*distance)
             BC = Decimal(math.cos(math.radians(azimuth2))*distance)
+
             #print((start_latitude, start_longitude), (end_latitude, end_longitude))
-            #print("AC: {}, BC: {}, azimuth1: {}, azimuth2: {}\n, time: {}\n, distance: {} \n\n".format(AC, BC, azimuth1, azimuth2, Decimal(time_diff), distance))
-            #time.sleep(1)
+            #print("AC: {}, BC: {}, azimuth1: {}, azimuth2: {}, \ntime: {}, distance: {} seconds: {}\n\n\n".format(AC, BC, azimuth1, azimuth2, Decimal(time_diff), distance, gps_epoch_seconds))
+
             gps_elevation_change_next_meters = end_altitude - start_altitude
             gps_velocity_east_next_meters_second = 0.0 if time_diff == 0.0 else AC/Decimal(time_diff)  
             gps_velocity_east_next_meters_second = 0.0 if gps_velocity_east_next_meters_second == 0.0 else gps_velocity_east_next_meters_second
@@ -97,7 +99,7 @@ class TrekviewHelpers():
             gps_velocity_up_next_meters_second = 0.0 if gps_velocity_up_next_meters_second == 0.0 else gps_velocity_up_next_meters_second
             gps_speed_next_meters_second = 0.0 if time_diff == 0.0 else distance/time_diff 
             gps_speed_next_meters_second = 0.0 if gps_speed_next_meters_second == 0.0 else gps_speed_next_meters_second
-            gps_heading_next_degrees = compass_bearing
+            gps_heading_next_degrees = 0 if distance == 0.0 else compass_bearing
             gps_pitch_next_degrees = 0.0 if distance == 0.0 else (gps_elevation_change_next_meters / distance)%360
             gps_distance_next_meters = distance
             gps_speed_next_kmeters_second = gps_distance_next_meters/1000.0 #in kms
@@ -238,6 +240,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
         else:
             self.__breakIntoFrames(self.__config["args"].input)
         videoData['images'] = fnmatch.filter(os.listdir(self.__config["imageFolderPath"]), '*.jpg')
+        videoData['images'].sort()
         startTime = videoData['startTime']
         icounter = 0
         if len(videoData['images']) > 0:
@@ -440,6 +443,8 @@ class TrekViewGoProMp4(TrekviewHelpers):
 
             t0Images = fnmatch.filter(os.listdir(track0), '*.jpg')
             t5Images = fnmatch.filter(os.listdir(track5), '*.jpg')
+            t0Images.sort()
+            t5Images.sort()
             imgCounter = 0
             for img in t0Images:
                 if imgCounter < len(t5Images):
@@ -733,6 +738,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
         print("Running exiftool to extract metadata...")
 
         images = fnmatch.filter(os.listdir(self.__config["imageFolderPath"]), '*.jpg')
+        images.sort()
         output = self._exiftool(["-ee", "-G3", "-api", "LargeFileSupport=1", "-X", self.__config["args"].input])
         if output["output"] is None:
             logging.critical(output["error"])
