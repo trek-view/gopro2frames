@@ -83,16 +83,20 @@ class TrekviewHelpers():
 
             compass_bearing = azimuth2
             #Create Metada Fields
-            AC = Decimal(math.cos(math.radians(compass_bearing))*distance)
-            BC = Decimal(math.sin(math.radians(compass_bearing))*distance)
+            AC = Decimal(math.sin(math.radians(azimuth1))*distance)
+            BC = Decimal(math.cos(math.radians(azimuth2))*distance)
             #print((start_latitude, start_longitude), (end_latitude, end_longitude))
             #print("AC: {}, BC: {}, azimuth1: {}, azimuth2: {}\n, time: {}\n, distance: {} \n\n".format(AC, BC, azimuth1, azimuth2, Decimal(time_diff), distance))
             #time.sleep(1)
             gps_elevation_change_next_meters = end_altitude - start_altitude
             gps_velocity_east_next_meters_second = 0.0 if time_diff == 0.0 else AC/Decimal(time_diff)  
+            gps_velocity_east_next_meters_second = 0.0 if gps_velocity_east_next_meters_second == 0.0 else gps_velocity_east_next_meters_second
             gps_velocity_north_next_meters_second = 0.0 if time_diff == 0.0 else BC/Decimal(time_diff)
+            gps_velocity_north_next_meters_second = 0.0 if gps_velocity_north_next_meters_second == 0.0 else gps_velocity_north_next_meters_second
             gps_velocity_up_next_meters_second = 0.0 if time_diff == 0.0 else gps_elevation_change_next_meters/time_diff
+            gps_velocity_up_next_meters_second = 0.0 if gps_velocity_up_next_meters_second == 0.0 else gps_velocity_up_next_meters_second
             gps_speed_next_meters_second = 0.0 if time_diff == 0.0 else distance/time_diff 
+            gps_speed_next_meters_second = 0.0 if gps_speed_next_meters_second == 0.0 else gps_speed_next_meters_second
             gps_heading_next_degrees = compass_bearing
             gps_pitch_next_degrees = 0.0 if distance == 0.0 else (gps_elevation_change_next_meters / distance)%360
             gps_distance_next_meters = distance
