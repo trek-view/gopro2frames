@@ -1,5 +1,6 @@
 import subprocess, itertools, argparse, platform, logging, datetime, fnmatch, shutil, pandas as pd, shlex, html, copy, time, json, math, csv, os, re
 from geographiclib.geodesic import Geodesic
+from decimal import Decimal, getcontext
 from haversine import haversine, Unit
 from pathlib import Path
 from lxml import etree as ET
@@ -79,49 +80,52 @@ class TrekviewHelpers():
             brng = Geodesic.WGS84.Inverse(start_latitude, start_longitude, end_latitude, end_longitude)
             azimuth1 = (brng['azi1'] + 360) % 360
             azimuth2 = (brng['azi2'] + 360) % 360
-            
+
             compass_bearing = azimuth2
             #Create Metada Fields
-            AC = (math.cos(math.radians(azimuth1))*distance)
-            BC = (math.sin(math.radians(azimuth2))*distance)
+            AC = Decimal(math.cos(math.radians(compass_bearing))*distance)
+            BC = Decimal(math.sin(math.radians(compass_bearing))*distance)
+            #print((start_latitude, start_longitude), (end_latitude, end_longitude))
+            #print("AC: {}, BC: {}, azimuth1: {}, azimuth2: {}\n, time: {}\n, distance: {} \n\n".format(AC, BC, azimuth1, azimuth2, Decimal(time_diff), distance))
+            #time.sleep(1)
             gps_elevation_change_next_meters = end_altitude - start_altitude
-            gps_velocity_east_next_meters_second = 0 if time_diff == 0.0 else AC/time_diff  
-            gps_velocity_north_next_meters_second = 0 if time_diff == 0.0 else BC/time_diff
-            gps_velocity_up_next_meters_second = 0 if time_diff == 0.0 else gps_elevation_change_next_meters/time_diff
-            gps_speed_next_meters_second = 0 if time_diff == 0.0 else distance/time_diff 
+            gps_velocity_east_next_meters_second = 0.0 if time_diff == 0.0 else AC/Decimal(time_diff)  
+            gps_velocity_north_next_meters_second = 0.0 if time_diff == 0.0 else BC/Decimal(time_diff)
+            gps_velocity_up_next_meters_second = 0.0 if time_diff == 0.0 else gps_elevation_change_next_meters/time_diff
+            gps_speed_next_meters_second = 0.0 if time_diff == 0.0 else distance/time_diff 
             gps_heading_next_degrees = compass_bearing
-            gps_pitch_next_degrees = 0 if distance == 0.0 else (gps_elevation_change_next_meters / distance)%360
+            gps_pitch_next_degrees = 0.0 if distance == 0.0 else (gps_elevation_change_next_meters / distance)%360
             gps_distance_next_meters = distance
             gps_speed_next_kmeters_second = gps_distance_next_meters/1000.0 #in kms
             gps_time_next_seconds = time_diff
         else:
             gps_epoch_seconds = times[2]
-            gps_velocity_east_next_meters_second = 0
-            gps_velocity_north_next_meters_second = 0
-            gps_velocity_up_next_meters_second = 0
-            gps_speed_next_meters_second = 0
-            gps_speed_next_kmeters_second = 0
-            gps_heading_next_degrees = 0
-            gps_elevation_change_next_meters = 0
-            gps_pitch_next_degrees = 0
-            gps_distance_next_meters = 0
-            gps_time_next_seconds = 0
+            gps_velocity_east_next_meters_second = 0.0
+            gps_velocity_north_next_meters_second = 0.0
+            gps_velocity_up_next_meters_second = 0.0
+            gps_speed_next_meters_second = 0.0
+            gps_speed_next_kmeters_second = 0.0
+            gps_heading_next_degrees = 0.0
+            gps_elevation_change_next_meters = 0.0
+            gps_pitch_next_degrees = 0.0
+            gps_distance_next_meters = 0.0
+            gps_time_next_seconds = 0.0
         return {
             "gps_epoch_seconds": gps_epoch_seconds,
             "gps_fix_type": gps_fix_type,
-            "gps_vertical_accuracy_meters": gps_vertical_accuracy_meters,
-            "gps_horizontal_accuracy_meters": gps_horizontal_accuracy_meters,
-            "gps_velocity_east_next_meters_second": gps_velocity_east_next_meters_second,
-            "gps_velocity_north_next_meters_second": gps_velocity_north_next_meters_second,
-            "gps_velocity_up_next_meters_second": gps_velocity_up_next_meters_second,
-            "gps_speed_accuracy_meters": gps_speed_accuracy_meters,
-            "gps_speed_next_meters_second": gps_speed_next_meters_second,
-            "gps_heading_next_degrees": gps_heading_next_degrees,
-            "gps_elevation_change_next_meters": gps_elevation_change_next_meters,
-            "gps_pitch_next_degrees": gps_pitch_next_degrees,
-            "gps_distance_next_meters": gps_distance_next_meters,
-            "gps_time_next_seconds": gps_time_next_seconds,
-            "gps_speed_next_kmeters_second": gps_speed_next_kmeters_second
+            "gps_vertical_accuracy_meters": "{0:.3f}".format(Decimal(gps_vertical_accuracy_meters)),
+            "gps_horizontal_accuracy_meters": "{0:.3f}".format(Decimal(gps_horizontal_accuracy_meters)),
+            "gps_velocity_east_next_meters_second": "{0:.3f}".format(Decimal(gps_velocity_east_next_meters_second)),
+            "gps_velocity_north_next_meters_second": "{0:.3f}".format(Decimal(gps_velocity_north_next_meters_second)),
+            "gps_velocity_up_next_meters_second": "{0:.3f}".format(Decimal(gps_velocity_up_next_meters_second)),
+            "gps_speed_accuracy_meters": "{0:.3f}".format(Decimal(gps_speed_accuracy_meters)),
+            "gps_speed_next_meters_second": "{0:.3f}".format(Decimal(gps_speed_next_meters_second)),
+            "gps_heading_next_degrees": "{0:.3f}".format(Decimal(gps_heading_next_degrees)),
+            "gps_elevation_change_next_meters": "{0:.3f}".format(Decimal(gps_elevation_change_next_meters)),
+            "gps_pitch_next_degrees": "{0:.3f}".format(Decimal(gps_pitch_next_degrees)),
+            "gps_distance_next_meters": "{0:.3f}".format(Decimal(gps_distance_next_meters)),
+            "gps_time_next_seconds": "{0:.3f}".format(Decimal(gps_time_next_seconds)),
+            "gps_speed_next_kmeters_second": "{0:.3f}".format(Decimal(gps_speed_next_kmeters_second))
         }
 
     def __subprocess(self, command, sh=0, capture_output=True):
