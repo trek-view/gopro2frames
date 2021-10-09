@@ -225,6 +225,8 @@ class TrekViewGoProMp4(TrekviewHelpers):
             self.__config["fileType"] = '360'
             filename = self.__convert360tomp4(videoData)
             #self.__breakIntoFrames(filename)
+            print("##", videoData["video_field_data"]["ProjectionType"])
+            videoData["video_field_data"]["360ProjectionType"] = "equirectangular"
         else:
             self.__breakIntoFrames(self.__config["args"].input)
         videoData['images'] = fnmatch.filter(os.listdir(self.__config["imageFolderPath"]), '*.jpg')
@@ -433,7 +435,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
             imgCounter = 0
             for img in t0Images:
                 if imgCounter < len(t5Images):
-                    print("Converting 360 image '{}' to equirectangular".format(img))
+                    print("Converting 360 image '{}' to euirectangular".format(img))
                     cmd = [max_sphere, '-w', _w, "track0/{}".format(img), "track5/{}".format(img)]
                     cmd = shlex.split(" ".join(cmd))
                     output = subprocess.run(cmd, capture_output=True)
@@ -664,28 +666,27 @@ class TrekViewGoProMp4(TrekviewHelpers):
             #Get Start Time from metadata
             start_time = gps["GPSDateTime"]
             gps_epoch_seconds = (start_time-t1970).total_seconds()
-
+            #Get Latitude, Longitude and Altitude
+            start_latitude = self.latLngToDecimal(gps["GPSLatitude"])
+            start_longitude = self.latLngToDecimal(gps["GPSLongitude"])
+            start_altitude = self.getAltitudeFloat(gps["GPSAltitude"])
+            gpx_point = gpxpy.gpx.GPXTrackPoint(
+                latitude=start_latitude, 
+                longitude=start_longitude, 
+                time=start_time, 
+                elevation=start_altitude
+            )
+            gpx_segment.points.append(gpx_point)
             if icounter < tlen-1:
                 #Get End Time from metadata
                 end_time = Timestamps[icounter+1]["GPSDateTime"]
                 time_diff = (end_time - start_time).total_seconds()
 
                 #Get Latitude, Longitude and Altitude
-                start_latitude = self.latLngToDecimal(gps["GPSLatitude"])
-                start_longitude = self.latLngToDecimal(gps["GPSLongitude"])
-                start_altitude = self.getAltitudeFloat(gps["GPSAltitude"])
-
                 end_latitude = self.latLngToDecimal(Timestamps[icounter+1]["GPSLatitude"])
                 end_longitude = self.latLngToDecimal(Timestamps[icounter+1]["GPSLongitude"])
                 end_altitude = self.getAltitudeFloat(Timestamps[icounter+1]["GPSAltitude"])
 
-                gpx_point = gpxpy.gpx.GPXTrackPoint(
-                    latitude=start_latitude, 
-                    longitude=start_longitude, 
-                    time=start_time, 
-                    elevation=start_altitude
-                )
-                gpx_segment.points.append(gpx_point)
                 ext = self.calculateExtensions(
                     gps, 
                     (start_time, end_time, gps_epoch_seconds),
@@ -851,7 +852,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 '-GPSPitch={}'.format(ext['gps_pitch_next_degrees']),
                 '-IFD0:Model="{}"'.format(self.removeEntities(data["video_field_data"]["DeviceName"]))
             ]
-            if data["video_field_data"]["ProjectionType"] == "equirectangular":
+            if (data["video_field_data"]["ProjectionType"] == "equirectangular") or ("360ProjectionType" in data["video_field_data"]):
                 cmdMetaData.append('-XMP-GPano:StitchingSoftware="{}"'.format(self.removeEntities(data["video_field_data"]["StitchingSoftware"])))
                 cmdMetaData.append('-XMP-GPano:SourcePhotosCount="{}"'.format(2))
                 cmdMetaData.append('-XMP-GPano:UsePanoramaViewer="{}"'.format("true"))
