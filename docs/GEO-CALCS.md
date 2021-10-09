@@ -56,9 +56,11 @@ Output is meters per second.
 
 Is velocity (east vector) to next photo.
 
-Velocity = Displacement / Time in a direction.
+`Velocity = Displacement / Time in a direction`
 
-So Velocity East = (distance photo A to point C) / Time (gps_time_seconds_next)
+So `Velocity East = Distance (along latitude) / Time (between source and destination)`
+
+Or using the diagram above `Velocity East = Distance (from A to C) / Time (from A to B)`
 
 Note, this calculation can result in a negative output. North and East are positive directions. If you travel West/South, in terms of an East/North vector, you will be traveling in both a negative East/North velocity.
 
@@ -76,7 +78,7 @@ Is velocity (north vector) to next photo.
 
 Same as above, but...
 
-Velocity North = (distance point C to photo B) / Time (gps_time_seconds_next)
+`Velocity North = Distance from C to B) / Time (from A to B)`
 
 Output is meters per second (can be negative)
 
@@ -86,7 +88,7 @@ Is velocity (up/vertical) to next photo.
 
 Same as above, but...
 
-Velocity Up = (gps_elevation_change_meters_next) / Time (gps_time_seconds_next)
+`Velocity Up = Elevation change (from A to B) / Time (from A to B)`
 
 Output is meters per second (can be negative)
 
