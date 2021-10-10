@@ -124,26 +124,6 @@ class TrekviewHelpers():
             gps_pitch_next_degrees = 0.0
             gps_distance_next_meters = 0.0
             gps_time_next_seconds = 0.0
-        print(
-            gps_velocity_north_next_meters_second,
-            {
-            "gps_epoch_seconds": gps_epoch_seconds,
-            "gps_fix_type": gps_fix_type,
-            "gps_vertical_accuracy_meters": "{0:.3f}".format(gps_vertical_accuracy_meters),
-            "gps_horizontal_accuracy_meters": "{0:.3f}".format(gps_horizontal_accuracy_meters),
-            "gps_velocity_east_next_meters_second": "{0:.3f}".format(gps_velocity_east_next_meters_second),
-            "gps_velocity_north_next_meters_second": "{0:.3f}".format(gps_velocity_north_next_meters_second),
-            "gps_velocity_up_next_meters_second": "{0:.3f}".format(gps_velocity_up_next_meters_second),
-            "gps_speed_accuracy_meters": "{0:.3f}".format(gps_speed_accuracy_meters),
-            "gps_speed_next_meters_second": "{0:.3f}".format(gps_speed_next_meters_second),
-            "gps_heading_next_degrees": "{0:.3f}".format(gps_heading_next_degrees),
-            "gps_elevation_change_next_meters": "{0:.3f}".format(gps_elevation_change_next_meters),
-            "gps_pitch_next_degrees": "{0:.3f}".format(gps_pitch_next_degrees),
-            "gps_distance_next_meters": "{0:.3f}".format(gps_distance_next_meters),
-            "gps_time_next_seconds": "{0:.3f}".format(gps_time_next_seconds),
-            "gps_speed_next_kmeters_second": "{0:.3f}".format(gps_speed_next_kmeters_second)
-        }
-        )
         return {
             "gps_epoch_seconds": gps_epoch_seconds,
             "gps_fix_type": gps_fix_type,
@@ -616,7 +596,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
                         if (len(ldata) <= 3):
                             ldata[tag] = elem.text.strip()
                             if len(ldata) == 3:
-                                if len(data['GPSData']) > 0:
+                                """if len(data['GPSData']) > 0:
                                     prev = data['GPSData'][-1]
                                     if (((ldata['GPSLatitude'] == prev['GPSLatitude']) and (ldata['GPSLongitude'] == prev['GPSLongitude']) and (ldata['GPSAltitude'] == prev['GPSAltitude'])) is not True):
                                         data['GPSData'].append(ldata)
@@ -624,7 +604,8 @@ class TrekViewGoProMp4(TrekviewHelpers):
                                         print("Found duplicate GPS POint...")
                                         print(ldata, prev)
                                 else:
-                                    data['GPSData'].append(ldata)
+                                    data['GPSData'].append(ldata)"""
+                                data['GPSData'].append(ldata)
                                 ldata = {}
         for k, v in adata.items():
             data[k] = v
@@ -712,7 +693,14 @@ class TrekViewGoProMp4(TrekviewHelpers):
         icounter = 0
         tlen = len(Timestamps)
         t1970 = datetime.datetime.strptime("1970:01:01 00:00:00.000000", "%Y:%m:%d %H:%M:%S.%f")
+        prev = None
         for gps in Timestamps:
+            #removing duplicate lat&lng
+            if icounter > 0:
+                prev = Timestamps[icounter-1]
+                if ((gps['GPSLatitude'] == prev['GPSLatitude']) and (gps['GPSLongitude'] == prev['GPSLongitude']) and (gps['GPSAltitude'] == prev['GPSAltitude'])):
+                    icounter = icounter + 1
+                    continue
             #Get Start Time from metadata
             start_time = gps["GPSDateTime"]
             gps_epoch_seconds = (start_time-t1970).total_seconds()
