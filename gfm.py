@@ -38,8 +38,8 @@ class TrekviewHelpers():
         return alt
 
     def decimalDivide(self, num1, num2):
-        num1 = Decimal(float("{:.6f}".format(num1)))
-        num2 = Decimal(float("{:.6f}".format(num2)))
+        num1 = Decimal(round(num1, 6))
+        num2 = Decimal(round(num2, 6))
         if num2 == 0.0:
             return 0.0
         if num1 == 0.0:
@@ -47,7 +47,7 @@ class TrekviewHelpers():
         num = Decimal(num1 / num2)
         if num == 0.0:
             num = abs(num)
-        return float(num)
+        return round(float(num), 3)
 
     def calculateBearing(self, lat1, long1, lat2, long2):
         Long = (long2-long1)
@@ -124,6 +124,26 @@ class TrekviewHelpers():
             gps_pitch_next_degrees = 0.0
             gps_distance_next_meters = 0.0
             gps_time_next_seconds = 0.0
+        print(
+            gps_velocity_north_next_meters_second,
+            {
+            "gps_epoch_seconds": gps_epoch_seconds,
+            "gps_fix_type": gps_fix_type,
+            "gps_vertical_accuracy_meters": "{0:.3f}".format(gps_vertical_accuracy_meters),
+            "gps_horizontal_accuracy_meters": "{0:.3f}".format(gps_horizontal_accuracy_meters),
+            "gps_velocity_east_next_meters_second": "{0:.3f}".format(gps_velocity_east_next_meters_second),
+            "gps_velocity_north_next_meters_second": "{0:.3f}".format(gps_velocity_north_next_meters_second),
+            "gps_velocity_up_next_meters_second": "{0:.3f}".format(gps_velocity_up_next_meters_second),
+            "gps_speed_accuracy_meters": "{0:.3f}".format(gps_speed_accuracy_meters),
+            "gps_speed_next_meters_second": "{0:.3f}".format(gps_speed_next_meters_second),
+            "gps_heading_next_degrees": "{0:.3f}".format(gps_heading_next_degrees),
+            "gps_elevation_change_next_meters": "{0:.3f}".format(gps_elevation_change_next_meters),
+            "gps_pitch_next_degrees": "{0:.3f}".format(gps_pitch_next_degrees),
+            "gps_distance_next_meters": "{0:.3f}".format(gps_distance_next_meters),
+            "gps_time_next_seconds": "{0:.3f}".format(gps_time_next_seconds),
+            "gps_speed_next_kmeters_second": "{0:.3f}".format(gps_speed_next_kmeters_second)
+        }
+        )
         return {
             "gps_epoch_seconds": gps_epoch_seconds,
             "gps_fix_type": gps_fix_type,
