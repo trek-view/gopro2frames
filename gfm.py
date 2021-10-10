@@ -250,11 +250,10 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 tt = GPSDateTime.split(".")
                 tt[1] = tt[1][:3]
                 cmdMetaData = [
-                    '-DateTimeOriginal="{0}Z"'.format(GPSDateTime),
+                    '-DateTimeOriginal="{0}Z"'.format(tt[0]),
                     '-SubSecTimeOriginal="{0}"'.format(tt[1]),
                     '-SubSecDateTimeOriginal="{0}Z"'.format(".".join(tt))
                 ]
-                print(cmdMetaData)
                 cmdMetaData.append('-overwrite_original')
                 cmdMetaData.append("{}{}{}".format(self.__config["imageFolderPath"], os.sep, videoData['images'][icounter]))
                 output = self._exiftool(cmdMetaData)
@@ -589,7 +588,15 @@ class TrekViewGoProMp4(TrekviewHelpers):
                         if (len(ldata) <= 3):
                             ldata[tag] = elem.text.strip()
                             if len(ldata) == 3:
-                                data['GPSData'].append(ldata)
+                                if len(data['GPSData']) > 0:
+                                    prev = data['GPSData'][-1]
+                                    if (((ldata['GPSLatitude'] == prev['GPSLatitude']) and (ldata['GPSLongitude'] == prev['GPSLongitude']) and (ldata['GPSAltitude'] == prev['GPSAltitude'])) is not True):
+                                        data['GPSData'].append(ldata)
+                                    else:
+                                        print("Found duplicate GPS POint...")
+                                        print(ldata, prev)
+                                else:
+                                    data['GPSData'].append(ldata)
                                 ldata = {}
         for k, v in adata.items():
             data[k] = v
