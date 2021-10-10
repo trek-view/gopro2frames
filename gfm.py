@@ -37,6 +37,18 @@ class TrekviewHelpers():
         #print("\nalt: {} {} \n".format(alt, altitude.split(" ")[0]))
         return alt
 
+    def decimalDivide(self, num1, num2):
+        num1 = Decimal(float("{:.6f}".format(num1)))
+        num2 = Decimal(float("{:.6f}".format(num2)))
+        if num2 == 0.0:
+            return 0.0
+        if num1 == 0.0:
+            return 0.0
+        num = Decimal(num1 / num2)
+        if num == 0.0:
+            num = abs(num)
+        return float(num)
+
     def calculateBearing(self, lat1, long1, lat2, long2):
         Long = (long2-long1)
         y = math.sin(Long) * math.cos(lat2)
@@ -47,15 +59,15 @@ class TrekviewHelpers():
 
     def calculateExtensions(self, gps, times, positions, etype=1, utype=1):
         if utype == 1:
-            gps_speed_accuracy_meters = '0.1'
+            gps_speed_accuracy_meters = float('0.1')
             gps_fix_type = gps["GPSMeasureMode"]
-            gps_vertical_accuracy_meters = gps["GPSHPositioningError"]
-            gps_horizontal_accuracy_meters = gps["GPSHPositioningError"]
+            gps_vertical_accuracy_meters = float(gps["GPSHPositioningError"].strip())
+            gps_horizontal_accuracy_meters = float(gps["GPSHPositioningError"].strip())
         else:
-            gps_speed_accuracy_meters = '0.1'
+            gps_speed_accuracy_meters = float('0.1')
             gps_fix_type = '3-Dimensional Measurement'
-            gps_vertical_accuracy_meters = '0.1'
-            gps_horizontal_accuracy_meters = '0.1'
+            gps_vertical_accuracy_meters = float('0.1')
+            gps_horizontal_accuracy_meters = float('0.1')
         
         if etype == 1:
             #Get Times from metadata
@@ -84,25 +96,21 @@ class TrekviewHelpers():
             compass_bearing = azimuth2
 
             #Create Metada Fields
-            AC = Decimal(math.sin(math.radians(azimuth1))*distance)
-            BC = Decimal(math.cos(math.radians(azimuth2))*distance)
+            AC = math.sin(math.radians(azimuth1))*distance
+            BC = math.cos(math.radians(azimuth2))*distance
 
             #print((start_latitude, start_longitude), (end_latitude, end_longitude))
             #print("AC: {}, BC: {}, azimuth1: {}, azimuth2: {}, \ntime: {}, distance: {} seconds: {}\n\n\n".format(AC, BC, azimuth1, azimuth2, Decimal(time_diff), distance, gps_epoch_seconds))
 
-            gps_elevation_change_next_meters = end_altitude - start_altitude
-            gps_velocity_east_next_meters_second = 0.0 if time_diff == 0.0 else AC/Decimal(time_diff)  
-            gps_velocity_east_next_meters_second = 0.0 if gps_velocity_east_next_meters_second == 0.0 else gps_velocity_east_next_meters_second
-            gps_velocity_north_next_meters_second = 0.0 if time_diff == 0.0 else BC/Decimal(time_diff)
-            gps_velocity_north_next_meters_second = 0.0 if gps_velocity_north_next_meters_second == 0.0 else round(gps_velocity_north_next_meters_second)
-            gps_velocity_up_next_meters_second = 0.0 if time_diff == 0.0 else gps_elevation_change_next_meters/time_diff
-            gps_velocity_up_next_meters_second = 0.0 if gps_velocity_up_next_meters_second == 0.0 else round(gps_velocity_up_next_meters_second)
-            gps_speed_next_meters_second = 0.0 if time_diff == 0.0 else distance/time_diff 
-            gps_speed_next_meters_second = 0.0 if gps_speed_next_meters_second == 0.0 else round(gps_speed_next_meters_second)
-            gps_heading_next_degrees = 0 if distance == 0.0 else compass_bearing
-            gps_pitch_next_degrees = 0.0 if distance == 0.0 else (gps_elevation_change_next_meters / distance)%360
+            gps_elevation_change_next_meters = Decimal(end_altitude - start_altitude)
+            gps_velocity_east_next_meters_second = self.decimalDivide( AC, time_diff ) 
+            gps_velocity_north_next_meters_second = self.decimalDivide( BC, time_diff )
+            gps_velocity_up_next_meters_second = self.decimalDivide( gps_elevation_change_next_meters, time_diff )
+            gps_speed_next_meters_second = self.decimalDivide( distance, time_diff )
+            gps_heading_next_degrees = self.decimalDivide( compass_bearing, 1 )
+            gps_pitch_next_degrees = self.decimalDivide( gps_elevation_change_next_meters, distance ) % 360
             gps_distance_next_meters = distance
-            gps_speed_next_kmeters_second = gps_distance_next_meters/1000.0 #in kms
+            gps_speed_next_kmeters_second = self.decimalDivide( gps_distance_next_meters, 1000.0  ) #in kms
             gps_time_next_seconds = time_diff
         else:
             gps_epoch_seconds = times[2]
@@ -119,19 +127,19 @@ class TrekviewHelpers():
         return {
             "gps_epoch_seconds": gps_epoch_seconds,
             "gps_fix_type": gps_fix_type,
-            "gps_vertical_accuracy_meters": "{0:.3f}".format(Decimal(gps_vertical_accuracy_meters)),
-            "gps_horizontal_accuracy_meters": "{0:.3f}".format(Decimal(gps_horizontal_accuracy_meters)),
-            "gps_velocity_east_next_meters_second": "{0:.3f}".format(Decimal(gps_velocity_east_next_meters_second)),
-            "gps_velocity_north_next_meters_second": "{0:.3f}".format(Decimal(gps_velocity_north_next_meters_second)),
-            "gps_velocity_up_next_meters_second": "{0:.3f}".format(Decimal(gps_velocity_up_next_meters_second)),
-            "gps_speed_accuracy_meters": "{0:.3f}".format(Decimal(gps_speed_accuracy_meters)),
-            "gps_speed_next_meters_second": "{0:.3f}".format(Decimal(gps_speed_next_meters_second)),
-            "gps_heading_next_degrees": "{0:.3f}".format(Decimal(gps_heading_next_degrees)),
-            "gps_elevation_change_next_meters": "{0:.3f}".format(Decimal(gps_elevation_change_next_meters)),
-            "gps_pitch_next_degrees": "{0:.3f}".format(Decimal(gps_pitch_next_degrees)),
-            "gps_distance_next_meters": "{0:.3f}".format(Decimal(gps_distance_next_meters)),
-            "gps_time_next_seconds": "{0:.3f}".format(Decimal(gps_time_next_seconds)),
-            "gps_speed_next_kmeters_second": "{0:.3f}".format(Decimal(gps_speed_next_kmeters_second))
+            "gps_vertical_accuracy_meters": "{0:.3f}".format(gps_vertical_accuracy_meters),
+            "gps_horizontal_accuracy_meters": "{0:.3f}".format(gps_horizontal_accuracy_meters),
+            "gps_velocity_east_next_meters_second": "{0:.3f}".format(gps_velocity_east_next_meters_second),
+            "gps_velocity_north_next_meters_second": "{0:.3f}".format(gps_velocity_north_next_meters_second),
+            "gps_velocity_up_next_meters_second": "{0:.3f}".format(gps_velocity_up_next_meters_second),
+            "gps_speed_accuracy_meters": "{0:.3f}".format(gps_speed_accuracy_meters),
+            "gps_speed_next_meters_second": "{0:.3f}".format(gps_speed_next_meters_second),
+            "gps_heading_next_degrees": "{0:.3f}".format(gps_heading_next_degrees),
+            "gps_elevation_change_next_meters": "{0:.3f}".format(gps_elevation_change_next_meters),
+            "gps_pitch_next_degrees": "{0:.3f}".format(gps_pitch_next_degrees),
+            "gps_distance_next_meters": "{0:.3f}".format(gps_distance_next_meters),
+            "gps_time_next_seconds": "{0:.3f}".format(gps_time_next_seconds),
+            "gps_speed_next_kmeters_second": "{0:.3f}".format(gps_speed_next_kmeters_second)
         }
 
     def __subprocess(self, command, sh=0, capture_output=True):
