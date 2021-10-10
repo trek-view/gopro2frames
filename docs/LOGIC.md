@@ -139,11 +139,52 @@ GoPro reports telemetry at different time intervals, and not every GPS position 
 
 Therefore up to 18 points have no time between GPS timestamps being reported. The number of points reported between times also varies based on mode/GPS signal (when GPS signal low, this number might be a lot lower).
 
-Therefore, we first create times for all points noted in the telemetry.
-
 To do this we calculate how many points there are between each time interval. Based on the number of points, we then calculate time.
 
 For example, if GPSDateTime 1 = 1:00:00.000 and GPSDateTime 2 = 1:00:01.000 and there are 9 points reported between these two time, we know each point is about .100 second apart so times for points will be 1:00:00.000, 1:00:00.100. 1:00:00.200, ... 1:00:00.900.
+
+**A note on between points reported in GPMF with no time**
+
+If lat or lon or alt of untimed point (not point already with GPSTime in GoPro output ) e.g.
+
+```language
+<Track4:GPSLatitude>51 deg 16&#39; 21.17&quot; N</Track4:GPSLatitude>
+<Track4:GPSLongitude>0 deg 50&#39; 45.50&quot; W</Track4:GPSLongitude>
+<Track4:GPSAltitude>81.907 m</Track4:GPSAltitude>
+```
+
+is the same as the previous point, it is ignored, and not assigned a time/added to video GPX.
+
+e.g.
+
+```
+<Track4:GPSLatitude>51 deg 16&#39; 21.17&quot; N</Track4:GPSLatitude>
+<Track4:GPSLongitude>0 deg 50&#39; 45.50&quot; W</Track4:GPSLongitude>
+<Track4:GPSAltitude>81.907 m</Track4:GPSAltitude>
+<Track4:GPSLatitude>51 deg 16&#39; 21.17&quot; N</Track4:GPSLatitude>
+<Track4:GPSLongitude>0 deg 50&#39; 45.50&quot; W</Track4:GPSLongitude>
+<Track4:GPSAltitude>81.907 m</Track4:GPSAltitude>
+<Track4:GPSLatitude>51 deg 16&#39; 21.17&quot; N</Track4:GPSLatitude>
+<Track4:GPSLongitude>0 deg 50&#39; 45.50&quot; W</Track4:GPSLongitude>
+<Track4:GPSAltitude>81.907 m</Track4:GPSAltitude>
+<Track4:GPSLatitude>51 deg 16&#39; 21.17&quot; N</Track4:GPSLatitude>
+<Track4:GPSLongitude>0 deg 60&#39; 45.62&quot; W</Track4:GPSLongitude>
+<Track4:GPSAltitude>81.907 m</Track4:GPSAltitude>
+```
+
+In this case, only these two points would be considered to assign timings
+
+
+```
+<Track4:GPSLatitude>51 deg 16&#39; 21.17&quot; N</Track4:GPSLatitude>
+<Track4:GPSLongitude>0 deg 50&#39; 45.50&quot; W</Track4:GPSLongitude>
+<Track4:GPSAltitude>81.907 m</Track4:GPSAltitude>
+<Track4:GPSLatitude>51 deg 16&#39; 21.17&quot; N</Track4:GPSLatitude>
+<Track4:GPSLongitude>0 deg 60&#39; 45.62&quot; W</Track4:GPSLongitude>
+<Track4:GPSAltitude>81.907 m</Track4:GPSAltitude>
+```
+
+because sequential longitudes are different.
 
 **A note on final points reported in GPMF**
 
