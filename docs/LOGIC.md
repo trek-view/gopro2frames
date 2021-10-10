@@ -145,15 +145,18 @@ For example, if GPSDateTime 1 = 1:00:00.000 and GPSDateTime 2 = 1:00:01.000 and 
 
 **A note on between points reported in GPMF with no time**
 
-If lat or lon or alt of untimed point (not point already with GPSTime in GoPro output ) e.g.
+In a number of case lat+lon+alt of untimed point (not point already with GPSTime in GoPro output) can be duplicate e.g.
 
-```language
+```
+<Track4:GPSLatitude>51 deg 16&#39; 21.17&quot; N</Track4:GPSLatitude>
+<Track4:GPSLongitude>0 deg 50&#39; 45.50&quot; W</Track4:GPSLongitude>
+<Track4:GPSAltitude>81.907 m</Track4:GPSAltitude>
 <Track4:GPSLatitude>51 deg 16&#39; 21.17&quot; N</Track4:GPSLatitude>
 <Track4:GPSLongitude>0 deg 50&#39; 45.50&quot; W</Track4:GPSLongitude>
 <Track4:GPSAltitude>81.907 m</Track4:GPSAltitude>
 ```
 
-is the same as the previous point, it is ignored, and not assigned a time/added to video GPX.
+When GPS time has been calculated for all points, any next (in sequence) duplicate points (lat+lon+alt) should be removed. 
 
 e.g.
 
@@ -172,8 +175,7 @@ e.g.
 <Track4:GPSAltitude>81.907 m</Track4:GPSAltitude>
 ```
 
-In this case, only these two points would be considered to assign timings
-
+In this case, only these two points would be added to video gpx:
 
 ```
 <Track4:GPSLatitude>51 deg 16&#39; 21.17&quot; N</Track4:GPSLatitude>
@@ -184,7 +186,7 @@ In this case, only these two points would be considered to assign timings
 <Track4:GPSAltitude>81.907 m</Track4:GPSAltitude>
 ```
 
-because sequential longitudes are different.
+because sequential (next point) longitudes are different.
 
 **A note on final points reported in GPMF**
 
