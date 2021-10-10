@@ -111,6 +111,7 @@ Options:
 * -d enable debug mode, default: false. If flag is passed, will be set to true.
 * -m custom MAX2Sphere path, default: ./MAX2sphere/MAX2sphere
 * -f custom ffmpeg install path, default: default binding
+* -n nadir logo path, default: none
 
 #### Examples (MacOS)
 
@@ -148,6 +149,12 @@ python3 gfm.py -f /Users/dgreenwood/bin/ffmpeg GS018422.mp4
 
 ```
 python3 gfm.py -m /Users/dgreenwood/bin/MAX2sphere/MAX2sphere GS018422.mp4
+```
+
+##### Add a custom nadir
+
+```
+python3 gfm.py -n /Users/dgreenwood/logo/trekview.png GS018422.mp4
 ```
 
 ## Support

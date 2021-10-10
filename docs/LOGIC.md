@@ -263,8 +263,26 @@ This is identical to step 4, however, the new GPS values from exiftool are used 
 * gps_vertical_accuracy = 0.1
 * gps_horizontal_accuracy = 0.1
 * gps_speed_accuracy = 0.1
+
+### Step 8: Add nadir (only equirectangular and if user selected)
+
+User should be able to pass flag `-n` at upload with path to a logo file.
+
+Logo file must be:
+
+* .png filetype
+* square dimensions
+* >= 500 px height
+
+Nadir can be added to each image using imagemagick.
+
+To create the nadir, these steps can be followed:
+
+https://github.com/trek-view/basecamp/blob/master/_posts/2021-10-21-adding-a-custom-nadir-to-360-video-photo.md
+
+Note, nadir only needs to be converted to equirectangular and resized once (as all frames have same dimensions so output can be overlaid over each)
 			
-### Step 8: Write additional metadata to photo
+### Step 9: Write additional metadata to photo
 
 #### GPX fields
 
@@ -308,7 +326,7 @@ This step is only for
 
 Note, some spatial fields are always fixed (e.g. XMP-GPano:SourcePhotosCount b/c GoPro 360 cameras only have 2 lenses), so values are static.
 
-### Step 9: Done
+### Step 10: Done
 
 You now have:
 
