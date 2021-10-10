@@ -145,7 +145,7 @@ For example, if GPSDateTime 1 = 1:00:00.000 and GPSDateTime 2 = 1:00:01.000 and 
 
 **A note on between points reported in GPMF with no time**
 
-In a number of case lat+lon+alt of untimed point (not point already with GPSTime in GoPro output) can be duplicate e.g.
+In a number of case lat+lon of untimed point (not point already with GPSTime in GoPro output) can be duplicate e.g.
 
 ```
 <Track4:GPSLatitude>51 deg 16&#39; 21.17&quot; N</Track4:GPSLatitude>
@@ -156,7 +156,7 @@ In a number of case lat+lon+alt of untimed point (not point already with GPSTime
 <Track4:GPSAltitude>81.907 m</Track4:GPSAltitude>
 ```
 
-When GPS time has been calculated for all points, any next (in sequence) duplicate points (lat+lon+alt) should be removed. 
+When GPS time has been calculated for all points, any next (in sequence) duplicate points (lat+lon) should be removed (ignored for inclusion in video GPX)
 
 e.g.
 
