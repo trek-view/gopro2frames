@@ -1,4 +1,4 @@
-import subprocess, itertools, argparse, platform, logging, datetime, fnmatch, shutil, pandas as pd, shlex, html, copy, time, json, math, csv, os, re
+import subprocess, threading, itertools, argparse, platform, logging, datetime, fnmatch, shutil, pandas as pd, shlex, html, copy, time, json, math, csv, os, re
 from geographiclib.geodesic import Geodesic
 from decimal import Decimal, getcontext
 from haversine import haversine, Unit
@@ -7,6 +7,112 @@ from lxml import etree as ET
 from os import walk
 import itertools
 import gpxpy
+
+def chunks(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+def Max2SphereConvert(max_sphere, w, path, image):
+    print("Converting 360 image '{}' to equirectangular".format(image))
+    track0 = '{}{}track0{}{}'.format(os.getcwd(), os.sep, os.sep, image)
+    track5 = '{}{}track5{}{}'.format(os.getcwd(), os.sep, os.sep, image)
+    out = '{}{}{}'.format(path, os.sep, image)
+    cmd = [max_sphere, '-w', str(w), "-o", out, track0, track5]
+    cmd = shlex.split(" ".join(cmd))
+    output = subprocess.run(cmd, capture_output=True)
+
+def Max2Sphere(max_sphere, w, path):
+    track0 = '{}{}track0'.format(os.getcwd(), os.sep)
+    t0Images = fnmatch.filter(os.listdir(track0), '*.jpg')
+    t0Images.sort()
+    files = list(chunks(t0Images, 8))
+    for images in files:
+        threads = []
+        for i in range(0, len(images)):
+            threads.append(threading.Thread(target=Max2SphereConvert, args=(max_sphere, w, path, images[i],)))
+
+        for t in threads:
+            t.start()
+
+        for t in threads:
+            t.join()
+
+def ExiftoolGetMetadata(path, image, imageData):
+    #Get metadata from exiftool
+    cmd = ["exiftool", "-ee", "-G3", "-j", "{}{}{}".format(path, os.sep, image)]
+    output = subprocess.run(cmd, capture_output=True)
+    output = output.stdout.decode('utf-8',"ignore")
+    photo = json.loads(output)[0]
+    imageData[image] = photo
+    #print(photo)
+
+def ExiftoolGetImagesMetadata(path, images, imageData):
+    images = list(chunks(images, 5))
+
+    for image in images:
+        threads = []
+        for i in range(0, len(image)):
+            threads.append(threading.Thread(target=ExiftoolGetMetadata, args=(path, image[i],imageData,)))
+
+        for t in threads:
+            t.start()
+
+        for t in threads:
+            t.join()
+    return imageData
+
+def ExiftoolInjectMetadata(metadata):
+    metadata.insert(0, "exiftool")
+    output = subprocess.run(metadata, capture_output=True)
+    if output.returncode == 0:
+        print("Injecting additional metadata to {} is done.".format(metadata[-1]))
+    else:
+        print("Error Injecting additional metadata to {}.".format(metadata[-1]))
+
+def ExiftoolInjectImagesMetadata(cmdMetaDataAll):
+    metadatas = list(chunks(cmdMetaDataAll, 5))
+
+    for metadata in metadatas:
+        threads = []
+        for i in range(0, len(metadata)):
+            threads.append(threading.Thread(target=ExiftoolInjectMetadata, args=(metadata[i],)))
+
+        for t in threads:
+            t.start()
+
+        for t in threads:
+            t.join()
+    return
+
+def AddNadir(image, nadir, imageData, vtype):
+    imageWidth = imageData["Main:ImageWidth"]
+    imageHeight = imageData["Main:ImageHeight"]
+    if vtype != "360":
+        imageWidth = "-1"
+    else:
+        imageWidth = str(imageWidth)
+    imageHeight = int(imageHeight)*(15/100)
+    imageHeight = str(round(imageHeight))
+    fout = subprocess.run([
+        "ffmpeg", "-y", "-i", image, "-i", nadir, "-filter_complex", "[1:v]scale="+imageWidth+":"+imageHeight+" [ovrl],[0:v][ovrl] overlay=(W-w):(H-h)", "-c:v", "mjpeg", "-f", "image2pipe", image
+        ]
+    )
+    print("Adding Nadir to {} is done.".format(image))
+
+def Nadir(images):
+    images = list(chunks(images, 5))
+
+    for image in images:
+        threads = []
+        for i in range(0, len(image)):
+            threads.append(threading.Thread(target=AddNadir, args=(image[i],)))
+
+        for t in threads:
+            t.start()
+
+        for t in threads:
+            t.join()
+    return
 
 class TrekviewHelpers():
     def __init__(self, config):
@@ -217,7 +323,8 @@ class TrekViewGoProMp4(TrekviewHelpers):
         self.__config = {
             "log_path": os.getcwd() + os.sep + "logs",
             "args": args,
-            "date_time_current": dateTimeCurrent
+            "date_time_current": dateTimeCurrent,
+            "nadir": ''
         }
 
         self.__setLogging()
@@ -246,7 +353,9 @@ class TrekViewGoProMp4(TrekviewHelpers):
             print("##", videoData["video_field_data"]["ProjectionType"])
             videoData["video_field_data"]["360ProjectionType"] = "equirectangular"
         else:
-            self.__breakIntoFrames(self.__config["args"].input)
+            if fileType == "mp4":
+                self.__config["fileType"] = "mp4"
+                self.__breakIntoFrames(self.__config["args"].input)
         videoData['images'] = fnmatch.filter(os.listdir(self.__config["imageFolderPath"]), '*.jpg')
         videoData['images'].sort()
         startTime = videoData['startTime']
@@ -299,17 +408,22 @@ class TrekViewGoProMp4(TrekviewHelpers):
     def __validateArguments(self):
         args = self.__config["args"]
         check = self._checkFileExists(args.input)
+        self.__config["nadir"]
+        if (args.nadir_image is not None):
+            self.__config["nadir"] = args.nadir_image
+        else:
+            self.__config["nadir"] = ''
         if check == False:
             exit("{} does not exists. Please provide a valid video file.".format(args.input))
         if (args.frame_rate is not None):
-            frameRate = int(args.frame_rate)
-            fropts = [1,2,5]
+            frameRate = args.frame_rate
+            fropts = [0.5, 1, 2, 5]
             if frameRate not in fropts:
-                exit("Frame rate {} is not available. Only 1, 2, 5 options are available.".format(frameRate))
+                exit("Frame rate {} is not available. Only 0.5, 1, 2, 5 options are available.".format(frameRate))
             else:
                 self.__config["frame_rate"] = frameRate
         else:
-            self.__config["frame_rate"] = 5
+            self.__config["frame_rate"] = 0.5
 
         if (args.time_warp is not None):
             timeWarp = str(args.time_warp)
@@ -387,7 +501,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
             if videoData['StitchingSoftware'].strip() not in StitchingSoftwares:
                 logging.critical("Only mp4's stitched using GoPro software are supported. Please use GoPro software to stitch your GoPro 360 videos.")
                 exit("Only mp4's stitched using GoPro software are supported. Please use GoPro software to stitch your GoPro 360 videos.")"""
-        return vFileType
+        return vFileType.lower()
     
     def __convert360tomp4(self, videoData):
         filename = "{}{}{}.mp4".format(self.__config["imageFolderPath"], os.sep, self.__config["imageFolder"])
@@ -413,22 +527,15 @@ class TrekViewGoProMp4(TrekviewHelpers):
         os.makedirs(track5, exist_ok=True) 
 
         cmd = [
-            "-i",
-            self.__config["args"].input,
-            "-map", 
-            trackmapFirst,
-            "-r",
-            str(self.__config["frame_rate"]), 
-            "-q:v",
-            str(self.__config["quality"]),
-            track0 + os.sep + "img%d.jpg",
-            "-map", 
-            trackmapSecond,
-            "-r", 
-            str(self.__config["frame_rate"]),
-            "-q:v", 
-            str(self.__config["quality"]), 
-            track5 + os.sep + "img%d.jpg"
+            "-i", self.__config["args"].input,
+            "-map", trackmapFirst,
+            "-r", str(self.__config["frame_rate"]), 
+            "-q:v", str(self.__config["quality"]),
+            track0 + os.sep + "%06d.jpg",
+            "-map", trackmapSecond,
+            "-r", str(self.__config["frame_rate"]),
+            "-q:v", str(self.__config["quality"]), 
+            track5 + os.sep + "%06d.jpg"
         ]
         
         output = self._ffmpeg(cmd)
@@ -449,26 +556,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
                     max_sphere = ".{}MAX2sphere{}MAX2sphere".format(os.sep, os.sep)
             else:
                 max_sphere = self.__config["args"].max_sphere.strip()
-
-            t0Images = fnmatch.filter(os.listdir(track0), '*.jpg')
-            t5Images = fnmatch.filter(os.listdir(track5), '*.jpg')
-            t0Images.sort()
-            t5Images.sort()
-            imgCounter = 0
-            for img in t0Images:
-                if imgCounter < len(t5Images):
-                    print("Converting 360 image '{}' to equirectangular".format(img))
-                    cmd = [max_sphere, '-w', _w, "track0/{}".format(img), "track5/{}".format(img)]
-                    cmd = shlex.split(" ".join(cmd))
-                    output = subprocess.run(cmd, capture_output=True)
-                    logging.info(output)
-                    if output.returncode == 0:
-                        #iMG = int(img.replace("_sphere", "").replace("img", "").replace(".jpg", ""))
-                        iMG = imgCounter+1
-                        Path(track0+os.sep+img.replace(".jpg", "_sphere.jpg")).rename(self.__config["imageFolderPath"]+os.sep+"{0}_{1:06d}.jpg".format(self.__config["imageFolder"], iMG))
-                    else:
-                        raise Exception(output.stderr.decode('utf-8',"ignore"))
-                imgCounter = imgCounter + 1
+            Max2Sphere(max_sphere, _w, self.__config["imageFolderPath"])
         except Exception as e:
             logging.info(str(e))
             print(str(e))
@@ -815,16 +903,24 @@ class TrekViewGoProMp4(TrekviewHelpers):
         counter = 0
         photosLen = len(data['images'])
         t1970 = datetime.datetime.strptime("1970:01:01 00:00:00.000000", "%Y:%m:%d %H:%M:%S.%f")
+
+        imageData = {}
+        imageData = ExiftoolGetImagesMetadata(self.__config["imageFolderPath"], data['images'], imageData)
+
+        cmdMetaDataAll = []
+        
+        if self.__config["nadir"] != "":
+            for image in data['images']:
+                nadir_image = "{}{}{}".format(self.__config["imageFolderPath"], os.sep, image)
+                AddNadir(nadir_image, self.__config["nadir"], imageData[image], self.__config["fileType"])
+
+        counter = 0
         for img in data['images']:
             if counter < photosLen - 1:
                 photo = [data['images'][counter], data['images'][counter + 1]]
-                #Get metadata from exiftool
-                cmd = ["-ee", "-G3", "-j", "-api", "LargeFileSupport=1", self.__config["imageFolderPath"]+os.sep+photo[0]]
-                output = self._exiftool(cmd)
-                start_photo = json.loads(output["output"])[0]
-                cmd = ["-ee", "-G3", "-j", "-api", "LargeFileSupport=1", self.__config["imageFolderPath"]+os.sep+photo[1]]
-                output = self._exiftool(cmd)
-                end_photo = json.loads(output["output"])[0]
+
+                start_photo = imageData[data['images'][counter]]
+                end_photo   = imageData[data['images'][counter + 1]]
 
                 #Get Times from metadata
                 start_time = datetime.datetime.strptime(start_photo["Main:GPSDateTime"].replace("Z", ""), "%Y:%m:%d %H:%M:%S.%f")
@@ -851,10 +947,8 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 )
             else:
                 photo = [data['images'][counter], None]
-                #Get metadata from exiftool
-                cmd = ["-ee", "-G3", "-j", "-api", "LargeFileSupport=1", self.__config["imageFolderPath"]+os.sep+photo[0]]
-                output = self._exiftool(cmd)
-                start_photo = json.loads(output["output"])[0]
+
+                start_photo = imageData[data['images'][counter]]
 
                 #Get Times from metadata
                 start_time = datetime.datetime.strptime(start_photo["Main:GPSDateTime"].replace("Z", ""), "%Y:%m:%d %H:%M:%S.%f")
@@ -883,7 +977,17 @@ class TrekViewGoProMp4(TrekviewHelpers):
                     <{str(k)}>{str(v)}</{str(k)}>
                 """)
                 gpx_point.extensions.append(gpx_extension)
+
             cmdMetaData = [
+                '-DateTimeOriginal={0}'.format(start_photo["Main:DateTimeOriginal"]),
+                '-SubSecTimeOriginal={0}'.format(start_photo["Main:SubSecTimeOriginal"]),
+                '-SubSecDateTimeOriginal={0}'.format(start_photo["Main:SubSecDateTimeOriginal"]),
+
+                '-GPSDateTime={0}"'.format(start_photo["Main:GPSDateTime"]),
+                '-GPSLatitude="{0}"'.format(start_photo["Main:GPSLatitude"]),
+                '-GPSLongitude="{0}"'.format(start_photo["Main:GPSLongitude"]),
+                '-GPSAltitude="{0}"'.format(start_photo["Main:GPSAltitude"]),
+
                 '-GPSSpeed={}'.format(kms),
                 '-GPSSpeedRef=k',
                 '-GPSImgDirection={}'.format(ext['gps_heading_next_degrees']),
@@ -904,9 +1008,9 @@ class TrekViewGoProMp4(TrekviewHelpers):
                 cmdMetaData.append('-XMP-GPano:CroppedAreaTopPixels="{}"'.format(0))
             cmdMetaData.append('-overwrite_original')
             cmdMetaData.append("{}{}{}".format(self.__config["imageFolderPath"], os.sep, photo[0]))
-            output = self._exiftool(cmdMetaData)
+            cmdMetaDataAll.append(cmdMetaData)
             counter = counter + 1
-            print("Injecting additional metadata to {} is done.".format(photo[0]))
+        ExiftoolInjectImagesMetadata(cmdMetaDataAll)
         gpxData = gpx.to_xml()
         gpxFileName = self.__config["imageFolder"] + "_photos.gpx"
         gpxFileName = self.__saveXmlMetaFile(gpxFileName, gpxData)
@@ -914,12 +1018,13 @@ class TrekViewGoProMp4(TrekviewHelpers):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("input", type=str, help="Input a valid video file.")
-    parser.add_argument("-r", "--frame-rate", type=int, help="Sets the frame rate (frames per second) for extraction, default: 5.", default=5)
+    parser.add_argument("-r", "--frame-rate", type=int, help="Sets the frame rate (frames per second) for extraction (available=[0.5, 1, 2, 5]), default: 0.5.", default=0.5)
     parser.add_argument("-t", "--time-warp", type=str, help="Set time warp mode for gopro. available values are 2x, 5x, 10x, 15x, 30x")
     parser.add_argument("-f", "--ffmpeg-path", type=str, help="Set the path for ffmpeg.")
     parser.add_argument("-m", "--max-sphere", type=str, help="Set the path for MAX2sphere binary.")
     parser.add_argument("-q", "--quality", type=int, help="Sets the extracted quality between 2-6. 1 being the highest quality (but slower processing), default: 1. This is value used for ffmpeg -q:v flag. ", default=1)
     parser.add_argument("-d", "--debug", action='store_true', help="Enable debug mode, default: off.")
+    parser.add_argument("-n", "--nadir-image", type=str, help="Nadir image to use on the extracted images.")
     args = parser.parse_args()
     dateTimeCurrent = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     goProMp4 = TrekViewGoProMp4(args, dateTimeCurrent)
