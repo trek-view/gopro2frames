@@ -14,9 +14,11 @@ def chunks(lst, n):
 
 def Max2SphereConvert(max_sphere, w, path, image):
     print("Converting 360 image '{}' to equirectangular".format(image))
-    track0 = '{}{}track0{}{}'.format(os.getcwd(), os.sep, os.sep, image)
-    track5 = '{}{}track5{}{}'.format(os.getcwd(), os.sep, os.sep, image)
-    out = '{}{}{}'.format(path, os.sep, image)
+    folder = os.getcwd()
+    file_folder = folder.split(os.sep)[-1]
+    track0 = '{}{}track0{}{}'.format(folder, os.sep, os.sep, image)
+    track5 = '{}{}track5{}{}'.format(folder, os.sep, os.sep, image)
+    out = '{}{}{}'.format(path, os.sep, "{}_{}".format(file_folder, image))
     cmd = [max_sphere, '-w', str(w), "-o", out, track0, track5]
     cmd = shlex.split(" ".join(cmd))
     output = subprocess.run(cmd, capture_output=True)
