@@ -16,6 +16,7 @@ def Max2SphereConvert(max_sphere, w, path, image):
     print("Converting 360 image '{}' to equirectangular".format(image))
     folder = os.getcwd()
     file_folder = folder.split(os.sep)[-1]
+    file_folder = file_folder.split('_')[0]
     track0 = '{}{}track0{}{}'.format(folder, os.sep, os.sep, image)
     track5 = '{}{}track5{}{}'.format(folder, os.sep, os.sep, image)
     out = '{}{}{}'.format(path, os.sep, "{}_{}".format(file_folder, image))
