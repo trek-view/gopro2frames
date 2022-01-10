@@ -87,10 +87,10 @@ def ExiftoolInjectImagesMetadata(cmdMetaDataAll):
             t.join()
     return
 
-def AddNadir(image, nadir, imageData, vtype, height_percentage=15):
+def AddNadir(image, nadir, imageData, equirectangular, height_percentage=15):
     imageWidth = imageData["Main:ImageWidth"]
     imageHeight = imageData["Main:ImageHeight"]
-    if vtype != "360":
+    if equirectangular == False:
         imageWidth = "-1"
     else:
         imageWidth = str(imageWidth)
@@ -327,7 +327,8 @@ class TrekViewGoProMp4(TrekviewHelpers):
             "log_path": os.getcwd() + os.sep + "logs",
             "args": args,
             "date_time_current": dateTimeCurrent,
-            "nadir": ''
+            "nadir": '',
+            "equirectangular": False
         }
 
         self.__setLogging()
@@ -349,12 +350,17 @@ class TrekViewGoProMp4(TrekviewHelpers):
             ms = float(tw)
             videoData = self.__extractVideoInformationPre(args.input, "Track2")
         fileType = self.__validateVideo(videoData["video_field_data"])
+        if(videoData["video_field_data"]["ProjectionType"] == "equirectangular"):
+            self.__config["equirectangular"] = True
+        else:
+            self.__config["equirectangular"] = False
         if fileType == "360":
             self.__config["fileType"] = '360'
             filename = self.__convert360tomp4(videoData)
             #self.__breakIntoFrames(filename)
             print("##", videoData["video_field_data"]["ProjectionType"])
             videoData["video_field_data"]["360ProjectionType"] = "equirectangular"
+            self.__config["equirectangular"] = True
         else:
             if fileType == "mp4":
                 self.__config["fileType"] = "mp4"
@@ -924,7 +930,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
         if self.__config["nadir"] != "":
             for image in data['images']:
                 nadir_image = "{}{}{}".format(self.__config["imageFolderPath"], os.sep, image)
-                AddNadir(nadir_image, self.__config["nadir"], imageData[image], self.__config["fileType"], int(self.__config["nadir_percentage"]))
+                AddNadir(nadir_image, self.__config["nadir"], imageData[image], self.__config["equirectangular"], int(self.__config["nadir_percentage"]))
 
         counter = 0
         for img in data['images']:
