@@ -74,7 +74,7 @@ Options:
 	* `30x`
 * `-m` custom MAX2Sphere path, default: ./MAX2sphere/MAX2sphere
 * `-f` custom ffmpeg install path, default: default binding
-* `-n` nadir/watermark logo path and size (between 10 - 20, in increments of 1) default: none
+* `-n` nadir/watermark logo path and size (between 12 - 20, in increments of 1. see: Nadir/watermark section below for more info) default: none
 * `-d` enable debug mode, default: false. If flag is passed, will be set to true.
 
 ### Camera support
@@ -176,7 +176,7 @@ python3 gfm.py -m /Users/dgreenwood/bin/MAX2sphere/MAX2sphere GS018422.mp4
 ##### Add a custom nadir
 
 ```
-python3 gfm.py -n /Users/dgreenwood/logo/trekview.png 10 GS018422.mp4
+python3 gfm.py -n /Users/dgreenwood/logo/trekview.png 12 GS018422.mp4
 ```
 
 ## Support
