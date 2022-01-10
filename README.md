@@ -189,7 +189,7 @@ python3 gfm.py -m /Users/dgreenwood/bin/MAX2sphere/MAX2sphere GS018422.mp4
 ##### Add a custom nadir
 
 ```
-python3 gfm.py -n /Users/dgreenwood/logo/trekview.png 12 GS018422.mp4
+python3 gfm.py -n /Users/dgreenwood/logo/trekview.png -p 12 GS018422.mp4
 ```
 
 ## Support
