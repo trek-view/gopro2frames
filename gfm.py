@@ -87,14 +87,14 @@ def ExiftoolInjectImagesMetadata(cmdMetaDataAll):
             t.join()
     return
 
-def AddNadir(image, nadir, imageData, vtype):
+def AddNadir(image, nadir, imageData, vtype, height_percentage=15):
     imageWidth = imageData["Main:ImageWidth"]
     imageHeight = imageData["Main:ImageHeight"]
     if vtype != "360":
         imageWidth = "-1"
     else:
         imageWidth = str(imageWidth)
-    imageHeight = int(imageHeight)*(15/100)
+    imageHeight = int(imageHeight)*(height_percentage/100)
     imageHeight = str(round(imageHeight))
     fout = subprocess.run([
         "ffmpeg", "-y", "-i", image, "-i", nadir, "-filter_complex", "[1:v]scale="+imageWidth+":"+imageHeight+" [ovrl],[0:v][ovrl] overlay=(W-w):(H-h)", "-c:v", "mjpeg", "-f", "image2pipe", image
@@ -416,6 +416,15 @@ class TrekViewGoProMp4(TrekviewHelpers):
             self.__config["nadir"] = args.nadir_image
         else:
             self.__config["nadir"] = ''
+        if (args.nadir_percentage is not None):
+            nadir_percentage = args.nadir_percentage
+            if((nadir_percentage >= 12) and (nadir_percentage <= 20)):
+                nadir_percentage = int(nadir_percentage)
+            else:
+                nadir_percentage = 15
+            self.__config["nadir_percentage"] = nadir_percentage
+        else:
+            self.__config["nadir_percentage"] = 15
         if check == False:
             exit("{} does not exists. Please provide a valid video file.".format(args.input))
         if (args.frame_rate is not None):
@@ -915,7 +924,7 @@ class TrekViewGoProMp4(TrekviewHelpers):
         if self.__config["nadir"] != "":
             for image in data['images']:
                 nadir_image = "{}{}{}".format(self.__config["imageFolderPath"], os.sep, image)
-                AddNadir(nadir_image, self.__config["nadir"], imageData[image], self.__config["fileType"])
+                AddNadir(nadir_image, self.__config["nadir"], imageData[image], self.__config["fileType"], int(self.__config["nadir_percentage"]))
 
         counter = 0
         for img in data['images']:
@@ -1028,6 +1037,7 @@ if __name__ == '__main__':
     parser.add_argument("-q", "--quality", type=int, help="Sets the extracted quality between 2-6. 1 being the highest quality (but slower processing), default: 1. This is value used for ffmpeg -q:v flag. ", default=1)
     parser.add_argument("-d", "--debug", action='store_true', help="Enable debug mode, default: off.")
     parser.add_argument("-n", "--nadir-image", type=str, help="Nadir image to use on the extracted images.")
+    parser.add_argument("-p", "--nadir-percentage", type=str, help="Nadir height percentage to use on the extracted images.")
     args = parser.parse_args()
     dateTimeCurrent = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     goProMp4 = TrekViewGoProMp4(args, dateTimeCurrent)
