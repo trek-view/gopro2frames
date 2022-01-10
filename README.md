@@ -30,6 +30,8 @@ $ cd MAX2Sphere
 $ make -f Makefile
 ```
 
+_See MAX2Sphere repo for full install information._
+
 Wait for it to build and then go back to your main directory
 
 ```
@@ -46,6 +48,35 @@ $ pip3 install -r requirements.txt
 
 ## Usage
 
+### Options
+
+```
+$ python3 gfm.py [options] VIDEO_NAME.mp4
+```
+
+Options:
+
+* `-r` n sets the frame rate (frames per second) for extraction, default: `5`. Options available:
+	* `1`
+	* `2` 
+	* `5`
+* `-q` n sets the extracted quality between 2-6. 1 being the highest quality (but slower processing), default: 1. This is value used for ffmpeg `-q:v` flag. Options available:
+	* `1`
+	* `2` 
+	* `3`
+	* `4`
+	* `5`
+* `-t` enables timewarp mode. You NEED to use this if video was shot in timewarp mode, else telemetry will be inaccurate. You must also pass the timewarp mode used. No default
+	* `2x`
+	* `5x`
+	* `10x`
+	* `15x`
+	* `30x`
+* `-m` custom MAX2Sphere path, default: ./MAX2sphere/MAX2sphere
+* `-f` custom ffmpeg install path, default: default binding
+* `-n` nadir/watermark logo path and size (between 10 - 20, in increments of 1) default: none
+* `-d` enable debug mode, default: false. If flag is passed, will be set to true.
+
 ### Camera support
 
 This video only accepts mp4 videos shot on a GoPro cameras.
@@ -60,6 +91,10 @@ This script has currently been tested with the following GoPro cameras:
 	* HERO 10
 * GoPro MAX
 * GoPro Fusion
+
+### Test cases
+
+[A full library of sample files for each camera can be accessed here](https://guides.trekview.org/explorer/developer-docs/sequences/capture).
 
 ### Video requirements
 
@@ -84,34 +119,21 @@ If the script fails any of these checks, you will see an error returned.
 
 [To read how this script works, read this](https://guides.trekview.org/explorer/developer-docs/sequence-functions/process/gopro-video-telemetry).
 
-### Options
+### Nadir / watermark
 
-```
-$ python3 gfm.py [options] VIDEO_NAME.mp4
-```
+A square file to be used as a nadir (for equirectangular) or watermark (for flat) images can be passed to be used in the image. This feature is useful for adding a custom logo to extracted frame.
 
-Options:
+Nadir/watermark logo must be:
 
-* -r n sets the frame rate (frames per second) for extraction, default: `5`. Options available:
-	* `1`
-	* `2` 
-	* `5`
-* -q n sets the extracted quality between 2-6. 1 being the highest quality (but slower processing), default: 1. This is value used for ffmpeg `-q:v` flag. Options available:
-	* `1`
-	* `2` 
-	* `3`
-	* `4`
-	* `5`
-* - t enables timewarp mode. You NEED to use this if video was shot in timewarp mode, else telemetry will be inaccurate. You must also pass the timewarp mode used. No default
-	* `2x`
-	* `5x`
-	* `10x`
-	* `15x`
-	* `30x`
-* -d enable debug mode, default: false. If flag is passed, will be set to true.
-* -m custom MAX2Sphere path, default: ./MAX2sphere/MAX2sphere
-* -f custom ffmpeg install path, default: default binding
-* -n nadir logo path, default: none
+* <= 5mb
+* .png
+* square dimensions (with edges > 500 px)
+
+You also need to pass nadir/watermark size a a % of image height. For example, passing `-n /path/to/nadir/logo.png 20` will result in the nadir/watermark having dimensions 20% of image height.
+
+_Example of nadir image height_
+
+![](/docs/example-nadir-percentage-of-pano.jpeg)
 
 #### Examples (MacOS)
 
@@ -154,7 +176,7 @@ python3 gfm.py -m /Users/dgreenwood/bin/MAX2sphere/MAX2sphere GS018422.mp4
 ##### Add a custom nadir
 
 ```
-python3 gfm.py -n /Users/dgreenwood/logo/trekview.png GS018422.mp4
+python3 gfm.py -n /Users/dgreenwood/logo/trekview.png 10 GS018422.mp4
 ```
 
 ## Support
