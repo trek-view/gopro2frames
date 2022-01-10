@@ -2,6 +2,13 @@
 
 Converts GoPro mp4s with equirectangular projections into single frames with correct metadata.
 
+## Explorer
+
+If you don't / can't run this script locally, our cloud product, Explorer, provides almost all of this scripts functionality in a web app.
+
+* [Explorer app](https://explorer.trekview.org/).
+* [Explorer docs](https://guides.trekview.org/explorer/overview).
+
 ## Installation
 
 You must have:
@@ -66,7 +73,7 @@ Options:
 	* `3`
 	* `4`
 	* `5`
-* `-t` enables timewarp mode. You NEED to use this if video was shot in timewarp mode, else telemetry will be inaccurate. You must also pass the timewarp mode used. No default
+* `-t` enables timewarp mode. You NEED to use this if video was shot in timewarp mode, else telemetry will be inaccurate. The script does not support timewarp mode set to Auto (because it's impossible to determine the capture rate). No default
 	* `2x`
 	* `5x`
 	* `10x`
@@ -91,6 +98,8 @@ This script has currently been tested with the following GoPro cameras:
 	* HERO 10
 * GoPro MAX
 * GoPro Fusion
+
+It is very likely that older cameras are also supported, but we provide no support for these as they have not been tested.
 
 ### Test cases
 
