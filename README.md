@@ -131,9 +131,13 @@ Nadir/watermark logo must be:
 
 You also need to pass nadir/watermark size a a % of image height. For example, passing `-n /path/to/nadir/logo.png 20` will result in the nadir/watermark having dimensions 20% of image height.
 
-_Example of nadir image height_
+_Example of nadir image height (equirectangular)_
 
 ![](/docs/example-nadir-percentage-of-pano.jpeg)
+
+_Example of watermark image height (non-equirectangular)_
+
+![](/docs/example-watermark-percentage-of-photo.jpeg)
 
 #### Examples (MacOS)
 
