@@ -88,6 +88,7 @@ def ExiftoolInjectImagesMetadata(cmdMetaDataAll):
     return
 
 def AddNadir(image, nadir, imageData, equirectangular, height_percentage=15):
+    print('height_percentage', height_percentage)
     imageWidth = imageData["Main:ImageWidth"]
     imageHeight = imageData["Main:ImageHeight"]
     if equirectangular == False:
@@ -96,6 +97,7 @@ def AddNadir(image, nadir, imageData, equirectangular, height_percentage=15):
         imageWidth = str(imageWidth)
     imageHeight = int(imageHeight)*(height_percentage/100)
     imageHeight = str(round(imageHeight))
+    print(imageWidth, imageHeight)
     fout = subprocess.run([
         "ffmpeg", "-y", "-i", image, "-i", nadir, "-filter_complex", "[1:v]scale="+imageWidth+":"+imageHeight+" [ovrl],[0:v][ovrl] overlay=(W-w):(H-h)", "-c:v", "mjpeg", "-f", "image2pipe", image
         ]
@@ -423,9 +425,9 @@ class TrekViewGoProMp4(TrekviewHelpers):
         else:
             self.__config["nadir"] = ''
         if (args.nadir_percentage is not None):
-            nadir_percentage = args.nadir_percentage
+            nadir_percentage = int(args.nadir_percentage)
             if((nadir_percentage >= 12) and (nadir_percentage <= 20)):
-                nadir_percentage = int(nadir_percentage)
+                nadir_percentage = nadir_percentage
             else:
                 nadir_percentage = 15
             self.__config["nadir_percentage"] = nadir_percentage
