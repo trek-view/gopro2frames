@@ -1,7 +1,5 @@
-# Jekill temp files
-_site
-.sass-cache
-.jekyll-metadata
-
 # OS or Editor folders
 *.DS_Store
+
+# tests
+/samples
