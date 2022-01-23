@@ -29,11 +29,13 @@ $ git clone https://github.com/trek-view/gopro-frame-maker
 $ cd gopro-frame-maker
 ```
 
+### Note for GoPro MAX Users
+
 If you plan to use .360 videos with this script, you must clone our MAX2Sphere script
 
 ```
-$ git clone https://github.com/trek-view/MAX2Sphere
-$ cd MAX2Sphere
+$ git clone https://github.com/trek-view/MAX2sphere
+$ cd MAX2sphere
 $ make -f Makefile
 ```
 
@@ -44,6 +46,8 @@ Wait for it to build and then go back to your main directory
 ```
 $ cd ..
 ```
+
+### Using a virtual environment
 
 To keep things clean on your system, run it in a virtual environment:
 
