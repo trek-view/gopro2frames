@@ -19,51 +19,77 @@ This script utilises a custom version of ffmpeg:
 
 https://github.com/trek-view/FFmpeg
 
-### Step 1A: Convert .360 (only if .360 file format)
+### Step 1A: Convert .360 (only if Max flag passed)
 
 If the file is .360 fileformat, we must process it into an mp4 video first by:
 
 **Extract meta**
 
-```
-exiftool -ee -G3 -api LargeFileSupport=1 -X VIDEO.mp4 > VIDEO_META.xml
+```shell
+$ exiftool -ee -G3 -api LargeFileSupport=1 -X VIDEO.mp4 > VIDEO_META.xml
 ```
 
 **Extract into 2 tracks of frames**
 
-```
-ffmpeg -i INPUT.360 -map 0:0 -r XXX -q:v QQQ trackN/img%d.jpg -map 0:5 -r XXX -q:v QQQ trackN/img%d.jpg
+```shell
+$ ffmpeg -i INPUT.360 -map 0:0 -r XXX -q:v QQQ trackN/img%d.jpg -map 0:5 -r XXX -q:v QQQ trackN/img%d.jpg
 ```
 
 Where `XXX` = framerate user passes in CLI. And `QQQ` = quality.
 
-The two TrackN can be identified in the video metadata with the two tracks that contain CompressorName=GoPro H.265 encoder
+Note: if timelapse mode is used, the track numbers are different:
 
-E.g.
-
-```
-<Track1:CompressorName>GoPro H.265 encoder</Track1:CompressorName>
-<Track6:CompressorName>GoPro H.265 encoder</Track6:CompressorName>
-```
-
-Means track0 (`-map 0:5`) and track5 (`-map 0:5`) contain the video.
-
+* Regular video = `-map 0:0` and `-map 0:5`
+* Timewarp video = `-map 0:0` and `-map 0:4`
 
 **Merge 2 tracks of frames into one**
 
+```shell
+$ @SYSTEM_PATH/MAX2spherebatch -w XXXX -n 1 -m YYYY track%d/frame%4d.jpg
 ```
-@SYSTEM_PATH/MAX2sphere -w XXXX track0/img%d.jpg track5/img%d.jpg
+
+Note, -w flag variable (`XXXX`), if in XML ImageWidth is:
+
+* 4096, then -w = 4096
+* 2272, then -w = 2272
+
+For -m flag variable `YYYY` is equal to number of frames extracted.
+
+### Step 1B: Convert Fusion Fisheye (only if Fusion flag passed)
+
+If the file is 2 GoPro Fusion videos, we must process it into equirectangular frames:
+
+**Extract meta (from Front video)**
+
+```shell
+$ exiftool -ee -G3 -api LargeFileSupport=1 -X VIDEO_FR.mp4 > VIDEO_META.xml
 ```
 
-Note, -w flag. If in XML ImageWidth is:
+**Extract each video into frames**
 
-* 4096, then -w = 5376
-* 2272, then -w = 3072
-
-### Step 1B: Extract video metadata (only if .mp4 file format)
-
+```shell
+$ ffmpeg -i INPUT_FR.mp4 -r XXX -q:v QQQ FR/img%d.jpg 
+$ ffmpeg -i INPUT_BK.mp4 -r XXX -q:v QQQ BK/img%d.jpg 
 ```
-exiftool -ee -G3 -api LargeFileSupport=1 -X VIDEO.mp4 > VIDEO_META.xml
+
+Where `XXX` = framerate user passes in CLI. And `QQQ` = quality.
+
+**Merge 2 corresponding frames into one equirectangular image**
+
+```shell
+@SYSTEM_PATH/fusion2sphere -b 5 -f FR/img%d.jpg BK/img%d.jpg -o FINAL/img%d.jpg parameter-examples/PPPP.txt
+```
+
+Note, `PPPP` variable is determined by frame ImageWidth:
+
+* 3104, then `PPPP` = photo-mode.txt
+* 1568, then `PPPP` = video-3k-mode.txt
+* 2704, then `PPPP` = video-5_2k-mode.txt
+
+### Step 1C (mp4): Extract video metadata (only if .mp4 file format)
+
+```shell
+$ exiftool -ee -G3 -api LargeFileSupport=1 -X VIDEO.mp4 > VIDEO_META.xml
 ```
 
 Note: if .360 we already have this from step 1.
@@ -72,8 +98,8 @@ Note: if .360 we already have this from step 1.
 
 For mp4
 
-```
-ffmpeg -i VIDEO.mp4 -r 5 -q:v 1 img%d.jpg
+```shell
+$ ffmpeg -i VIDEO.mp4 -r 5 -q:v 1 img%d.jpg
 ```
 
 Where -r is framerate (FPS) and -q:v is quality (1 being the highest).
@@ -93,8 +119,8 @@ To assign first photo time, we use the first GPSDateTime value reported in telem
 
 Example exiftool command to write these values:
 
-```
-exiftool DateTimeOriginal:"2020:04:13 15:37:22Z" SubSecTimeOriginal:"444" SubSecDateTimeOriginal: "2020:04:13 15:37:22.444Z"
+```shell
+$ exiftool DateTimeOriginal:"2020:04:13 15:37:22Z" SubSecTimeOriginal:"444" SubSecDateTimeOriginal: "2020:04:13 15:37:22.444Z"
 ```
 
 #### Other frames (normal mode)
@@ -147,7 +173,7 @@ For example, if GPSDateTime 1 = 1:00:00.000 and GPSDateTime 2 = 1:00:01.000 and 
 
 In a number of case lat+lon of untimed point (not point already with GPSTime in GoPro output) can be duplicate e.g.
 
-```
+```xml
 <Track4:GPSLatitude>51 deg 16&#39; 21.17&quot; N</Track4:GPSLatitude>
 <Track4:GPSLongitude>0 deg 50&#39; 45.50&quot; W</Track4:GPSLongitude>
 <Track4:GPSAltitude>81.907 m</Track4:GPSAltitude>
@@ -160,7 +186,7 @@ When GPS time has been calculated for all points, any next (in sequence) duplica
 
 e.g.
 
-```
+```xml
 <Track4:GPSLatitude>51 deg 16&#39; 21.17&quot; N</Track4:GPSLatitude>
 <Track4:GPSLongitude>0 deg 50&#39; 45.50&quot; W</Track4:GPSLongitude>
 <Track4:GPSAltitude>81.907 m</Track4:GPSAltitude>
@@ -177,7 +203,7 @@ e.g.
 
 In this case, only these two points would be added to video gpx:
 
-```
+```xml
 <Track4:GPSLatitude>51 deg 16&#39; 21.17&quot; N</Track4:GPSLatitude>
 <Track4:GPSLongitude>0 deg 50&#39; 45.50&quot; W</Track4:GPSLongitude>
 <Track4:GPSAltitude>81.907 m</Track4:GPSAltitude>
@@ -194,7 +220,7 @@ At the end of the GoPro telemetry there is not a final time. That is, some GPS p
 
 There files are written into a GPX file.
 
-```
+```xml
 <trkseg>
 	<trkpt lat="51.27254444444444" lon="-0.8459694444444444">
 		<ele>82.008</ele>
