@@ -171,7 +171,7 @@ For example, if GPSDateTime 1 = 1:00:00.000 and GPSDateTime 2 = 1:00:01.000 and 
 
 **A note on between points reported in GPMF with no time**
 
-In a number of case lat+lon of untimed point (not point already with GPSTime in GoPro output) can be duplicate e.g.
+In a number of case lat+lon of untimed point (not point already with `GPSDateTime` in GoPro output) can be duplicate e.g.
 
 ```xml
 <Track4:GPSLatitude>51 deg 16&#39; 21.17&quot; N</Track4:GPSLatitude>
@@ -212,13 +212,19 @@ In this case, only these two points would be added to video gpx:
 <Track4:GPSAltitude>81.907 m</Track4:GPSAltitude>
 ```
 
-because sequential (next point) longitudes are different.
-
 **A note on final points reported in GPMF**
 
-At the end of the GoPro telemetry there is not a final time. That is, some GPS points continue beyond final reported time (usually 3 or 4). In this case, we calculate the final GPS timestamp by adding +1 second onto last GoPro reported timestamp, and then calculate points inbetween in exactly the same way as before.
+At the end of the GoPro telemetry there is not a final time. That is, some GPS points continue beyond final reported time (usually 3 or 4).
 
-There files are written into a GPX file.
+In this case, we can calculate the final time as follows:
+
+1. Subtract the first reported `GPSDateTime`  from the final reported `GPSDateTime` 
+2. Subtract the video `duration` metadata value from this calculated value
+3. This will give you remaining seconds of video. Add this value to the final reported `GPSDateTime` to create the final time.
+
+It is then possible to calculate points inbetween in exactly the same way as before.
+
+The result is written into a GPX file.
 
 ```xml
 <trkseg>
@@ -262,7 +268,7 @@ Now we can use the photo time and GPS positions / times to geotag the photos:
 
 [We can use Exiftool's geotag function to add GPS data (latitude, longitude, altitude)](https://exiftool.org/geotag.html).
 
-```
+```shell
 exiftool -Geotag a.log "-Geotime<SubSecDateTimeOriginal" dir
 
 ```
@@ -306,7 +312,7 @@ To create the nadir, these steps can be followed:
 
 https://github.com/trek-view/basecamp/blob/master/_posts/2021-10-21-adding-a-custom-nadir-to-360-video-photo.md
 
-Note, nadir only needs to be converted to equirectangular and resized once (as all frames have same dimensions so output can be overlaid over each)
+Note, nadir only needs to be converted to equirectangular and resized once (as all frames have same dimensions so output can be overlaid over each).
 			
 ### Step 9: Write additional metadata to photo
 
