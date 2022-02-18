@@ -59,6 +59,9 @@ $ pip3 install -r requirements.txt
 
 ## Usage
 
+### Added support to use [config.ini](https://github.com/trek-view/gopro-frame-maker/blob/dev/config.ini) file 
+If using config.ini file only videos (1 video in case of max, and 2 videos in case of fusion) needs to pass as the arguments all other flags will be taken from config.ini
+
 ### Options
 
 ```
