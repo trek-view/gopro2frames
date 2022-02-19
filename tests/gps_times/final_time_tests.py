@@ -51,15 +51,27 @@ class TestGpsFinalTime(unittest.TestCase):
         self.assertIn('VideoFrameRate', video_field_data_keys) #check if video metadata has `VideoFrameRate` value in it.
         print('Duration', self.metadata['video_field_data']['Duration'])
 
-    def test_check_gps_gpx_data(self):
+    def test_check_gps_gpx_data_duration(self):
         metadata_gpx_keys = list(self.metadata_gpx.keys())
-        
-        print(self.metadata_gpx['start_time'], self.metadata_gpx['end_time'], self.metadata_gpx['end_time'] - self.metadata_gpx['start_time'])
         
         #self.metadata_gpx
         self.assertIsInstance(self.metadata_gpx, dict) #check if video metadata_gpx is of dict type.
         self.assertIn('gpx_data', metadata_gpx_keys) #check if video metadata_gpx has `gpx_data` value in it.
         self.assertIn('start_time', metadata_gpx_keys) #check if video metadata_gpx has `start_time` value in it.
+
+        #difference between start time and end time
+        duration1 = (self.metadata_gpx['end_time'] - self.metadata_gpx['start_time']).total_seconds()
+        #assuming time should not be greater than 24 hrs 
+        duration2 = datetime.datetime.strptime("2022:1:1 00:00:00.000", "%Y:%m:%d %H:%M:%S.%f")
+        duration3 = datetime.datetime.strptime("2022:1:1 {}".format(self.metadata['video_field_data']['Duration']), "%Y:%m:%d %H:%M:%S.%f")
+        #(getting total seconds)
+        duration4 = (duration3 - duration2).total_seconds()
+
+        #checking if video duration is equal to calculated start time and end time
+        self.assertEqual(duration1, duration4)
+
+        print(self.metadata_gpx['start_time'], self.metadata_gpx['end_time'], duration1, duration4)
+
         gpx_file = "{}{}{}{}{}".format(self.current_directory, os.sep, 'data', os.sep, 'video.gpx')
         with open(gpx_file, "w") as f:
             f.write(self.metadata_gpx['gpx_data'])
