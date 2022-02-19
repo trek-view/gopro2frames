@@ -91,6 +91,16 @@ Options:
 * `-n` nadir/watermark logo path and size (between 12 - 20, in increments of 1. see: Nadir/watermark section below for more info) default: none
 * `-d` enable debug mode, default: false. If flag is passed, will be set to true.
 
+### Run Tests
+
+All the tests resides in `tests` folder.
+
+To run all the tests, run:
+
+```
+python -m unittest discover tests -p '*_tests.py'
+```
+
 ### Camera support
 
 This video only accepts mp4 videos shot on a GoPro cameras.
