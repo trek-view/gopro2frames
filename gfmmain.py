@@ -451,6 +451,7 @@ class GoProFrameMaker(GoProFrameMakerParent):
             camera = 'fusion'
             if((equirectangular == False) and (args['predicted_camera'] == 'fusion') and (fileType == 'mp4')):
                 equirectangular = True
+
         #getting frames
         if fileType == "360":
             if camera == 'max':
@@ -593,7 +594,7 @@ class GoProFrameMaker(GoProFrameMakerParent):
             "-i", filename, 
             "-r", str(args["frame_rate"]), 
             "-q:v", str(args["quality"]), 
-            "{}{}_%06d.jpg".format(fileoutput, prefix)
+            "{}{}{}%06d.jpg".format(fileoutput, os.sep, prefix)
         ]
 
         output = self._ffmpeg(cmd, 1)
