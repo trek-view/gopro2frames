@@ -279,6 +279,7 @@ class GoProFrameMakerHelper():
 
     @staticmethod
     def gpsTimestamps(gpsData, videoFieldData):
+        
         gpx = gpxpy.gpx.GPX()
 
         # Create first track in our GPX:
@@ -291,6 +292,8 @@ class GoProFrameMakerHelper():
         Timestamps = []
         counter = 0
         gLen = len(gpsData)
+        first_start_time = datetime.datetime.strptime(gpsData[0]["GPSDateTime"].replace("Z", ""), "%Y:%m:%d %H:%M:%S.%f")
+        final_end_time = datetime.datetime.strptime(gpsData[0]["GPSDateTime"].replace("Z", ""), "%Y:%m:%d %H:%M:%S.%f")
         for gps in gpsData:
             if counter < gLen-1:
                 start_gps = gpsData[counter]
@@ -328,14 +331,13 @@ class GoProFrameMakerHelper():
                 #_e_date = start_gps["GPSDateTime"].split(" ")[0]
                 zero_start = datetime.datetime.strptime("2022:1:1 00:00:00.000", "%Y:%m:%d %H:%M:%S.%f")
                 zero_duration = datetime.datetime.strptime("2022:1:1 {}".format(videoFieldData['Duration']), "%Y:%m:%d %H:%M:%S.%f")
-                
 
                 start_time = datetime.datetime.strptime(start_gps["GPSDateTime"].replace("Z", ""), "%Y:%m:%d %H:%M:%S.%f")
-                first_start_time = datetime.datetime.strptime(gpsData[0]["GPSDateTime"].replace("Z", ""), "%Y:%m:%d %H:%M:%S.%f")
+                
                 l_1 = (start_time - first_start_time).total_seconds()
                 l_2 = (zero_duration - zero_start).total_seconds()
                 end_time = start_time+datetime.timedelta(0, l_2-l_1) 
-                #print('zzzz', end_time)
+                
                 time_diff = (end_time - start_time).total_seconds()
                 diff = int((time_diff/float(len(start_gps["GPSData"])))*1000.0)
                 #check this later
@@ -345,6 +347,7 @@ class GoProFrameMakerHelper():
                         start_time = end_time
                         diff = int((0.05)*1000.0)
                         end_time = end_time+datetime.timedelta(0, 0.05) 
+                final_end_time = end_time
                 new = pd.date_range(start=start_time, end=end_time, closed='left', freq="{}ms".format(diff))
                 icounter = 0
                 dlLen = 1 if len(start_gps["GPSData"]) < 1 else len(start_gps["GPSData"])
@@ -425,7 +428,7 @@ class GoProFrameMakerHelper():
         return {
             "gpx_data": gpxData,
             "start_time": Timestamps[0]['GPSDateTime'],
-            "end_time": end_time
+            "end_time": final_end_time
         }
 
 
