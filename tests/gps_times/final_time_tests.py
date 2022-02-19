@@ -60,6 +60,11 @@ class TestGpsFinalTime(unittest.TestCase):
         self.assertIsInstance(self.metadata_gpx, dict) #check if video metadata_gpx is of dict type.
         self.assertIn('gpx_data', metadata_gpx_keys) #check if video metadata_gpx has `gpx_data` value in it.
         self.assertIn('start_time', metadata_gpx_keys) #check if video metadata_gpx has `start_time` value in it.
+        gpx_file = "{}{}{}{}{}".format(self.current_directory, os.sep, 'data', os.sep, 'video.gpx')
+        with open(gpx_file, "w") as f:
+            f.write(self.metadata_gpx['gpx_data'])
+            f.close()
+
 
 if __name__ == '__main__':
     unittest.main()
