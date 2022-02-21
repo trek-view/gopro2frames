@@ -482,7 +482,6 @@ class GoProFrameMakerHelper():
                         'fusion_sphere': config['DEFAULT'].get('fusion_sphere'),
                         'fusion_sphere_params': config['DEFAULT'].get('fusion_params')
                     }
-                    print(default)
                     status = True
                 except:
                     status = False
