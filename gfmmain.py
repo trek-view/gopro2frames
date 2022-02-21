@@ -457,10 +457,11 @@ class GoProFrameMaker(GoProFrameMakerParent):
                 self.__breakIntoFrames(video_file_back, fusion_back, '')
                 total_images = fnmatch.filter(os.listdir(fusion_front), '*.jpg')
                 cmd = [
-                    str(args['fusion_sphere'].resolve()), '-w', str(4096), '-b', '5',
+                    str(args['fusion_sphere'].resolve()), 
+                    '-w', str(4096), '-b', '5',
                     '-g', '1', '-h', str(len(total_images)), 
-                    '-x', "{}{}%06d.jpg".format(fusion_front, os.sep), "{}{}%06d.jpg".format(fusion_back, os.sep),
                     '-o', "{}{}%06d.jpg".format(media_folder_full_path, os.sep),
+                    '-x', "{}{}%06d.jpg".format(fusion_front, os.sep), "{}{}%06d.jpg".format(fusion_back, os.sep),
                     str(args['fusion_sphere_params'].resolve())
                 ]
                 output = subprocess.run(cmd, capture_output=True)
