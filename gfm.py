@@ -4,12 +4,13 @@ from gfmhelper import GoProFrameMakerHelper
 from gfmmain import GoProFrameMaker
 
 if __name__ == '__main__':
-    init()
-
-    print(Fore.GREEN + "########################################")
-    print(Fore.GREEN + "#           GOPRO FRAME MAKER          #")
-    print(Fore.GREEN + "########################################")
+    init(autoreset=True)
+    print("\n")
+    print(Fore.YELLOW + "########################################")
+    print(Fore.YELLOW + "#           GOPRO FRAME MAKER          #")
+    print(Fore.YELLOW + "########################################")
     print(Style.RESET_ALL)
+    time.sleep(1)
 
     #parsing command line arguments
     parser = argparse.ArgumentParser()
@@ -37,6 +38,12 @@ if __name__ == '__main__':
 
         #fusion2sphere
         parser.add_argument("-u", "--fusion-sphere", type=str, help="Set the path for fusion2sphere binary.")
+
+        #fusion params
+        parser.add_argument("-v", "--fusion-params", type=str, help="Set the path for fusion params.txt.")
+
+        #image magick binary
+        parser.add_argument("-f", "--magick-path", type=str, help="Set the path for image magick.")
 
         #debug option
         parser.add_argument("-d", "--debug", action='store_true', help="Enable debug mode, default: off.")
@@ -73,8 +80,10 @@ if __name__ == '__main__':
         for k, v in selected_args.items():
             print(Fore.GREEN + "{}: {}".format(k, v))
         print(Style.RESET_ALL)
-        if selected_args['time_warp'] != '':
+        if selected_args['time_warp'] != None:
             print(Fore.RED + "\nTime warp value is selected, so the video is considered Time warped, if this is not supposed to be then please remove the value from config.ini key named: `time_warp`")
+        else:
+            print(Fore.RED + "\nTime warp value is not selected, if the video is Time warped, please make sure config.ini has value for key named: `time_warp`")
         print(Style.RESET_ALL)
         
         check = input(Fore.RED + "Are you sure you want to start processing?(y/n)")
