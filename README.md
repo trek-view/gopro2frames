@@ -91,6 +91,12 @@ Options:
 * `-n` nadir/watermark logo path and size (between 12 - 20, in increments of 1. see: Nadir/watermark section below for more info) default: none
 * `-d` enable debug mode, default: false. If flag is passed, will be set to true.
 
+## Test cases
+
+Our suite of test cases can be downloaded here:
+
+* [Valid video files](https://guides.trekview.org/explorer/developer-docs/sequences/upload/good-test-cases)
+
 ### Run Tests
 
 All the tests resides in `tests` folder.
@@ -100,6 +106,8 @@ To run all the tests, run:
 ```
 python -m unittest discover tests -p '*_tests.py'
 ```
+
+
 
 ### Camera support
 
@@ -127,23 +135,55 @@ It is very likely that older cameras are also supported, but we provide no suppo
 * Must be shot on GoPro camera
 * Must have telemetry (GPS enabled when shooting)
 
+### Logic
+
+The general processing pipeline of gopro-frame-maker is as follows;
+
+![](/docs/gopro-frame-maker-flow.jpg)
+
+[Image source here](https://docs.google.com/presentation/d/1Te7oUaPmlulYsZE6nqITC_sLjfDzDxwTmT5uM_EmXW8/edit#slide=id.p)
+
+[To read how this script works in detail, read this post](https://guides.trekview.org/explorer/developer-docs/sequence-functions/process/gopro-video-telemetry).
+
 ### Validation
 
-To ensure the video can be processed, the following checks are applied.
+To ensure the video can be processed, the following metadata check is applied.
 
-**Determine projection type**
+**1. Video contains GoPro telemetry**
+
+We check video contains telemetry from GoPro by identifying the following metatag `<TrackN:MetaFormat>gpmd</TrackN:MetaFormat>`. _Note: TrackN where N = track number, which varies between GoPro cameras._ 
+
+For dual GoPro Fisheye videos, this data is in the front video file.
+
+If the script fails this check, you will see an error returned.
+
+### Identify correct pipeline
+
+In order to process the video in the correct flow, the following logic is checked
+
+**Identify GoPro EAC .360**
+
+It is possible to identify .360 files by searching for the following metatag `<Track1:CompressorName>H.265 encoder</Track1:CompressorName>`. _Note: TrackN where N = track number, which varies between GoPro cameras._ 
+
+If true, pass to MAX2Sphere frame pipeline.
+
+**Identify dual GoPro Fisheye**
+
+It is possible to identify dual GoPro fisheyes by checking `ImageWidth` and `ImageHeight` of both videos. They should be either 2 videos = 2704 (w) x 2624 (h) OR 2 videos (w) = 1568 x 1504 (h)
+
+If true, pass to fusion2sphere frame pipeline.
+
+**Identify equirectangular mp4**
 
 For .mp4 videos we can determine video is spherical (equirectangular) if it contains the following metatag `<XMP-GSpherical:ProjectionType>equirectangular</XMP-GSpherical:ProjectionType>`.
 
-**If contains GoPro telemetry**
+If true, pass to equirectangular frame pipeline.
 
-Once projection type (360/non-360) has been determined, we next check it contains telemetry from GoPro by identifying the following metatag `<TrackN:MetaFormat>gpmd</TrackN:MetaFormat>`. _Note: TrackN where N = track number, which varies between GoPro cameras._ 
+**Identify equirectangular mp4**
 
-If the script fails any of these checks, you will see an error returned.
+Non-spherical mp4s can be identified if no `XMP-GSpherical:ProjectionType` tag is present.
 
-### Logic
-
-[To read how this script works, read this](https://guides.trekview.org/explorer/developer-docs/sequence-functions/process/gopro-video-telemetry).
+If true, pass to HERO frame pipeline.
 
 ### Nadir / watermark
 
@@ -170,7 +210,7 @@ _Example of watermark image height (non-equirectangular)_
 ##### Extract at a frame rate of 1 FPS
 
 ```
-$ python3 gfm.py -r 1 GS018422.mp4
+$ python3 gfm.py -r 1 samples/GS018422.mp4
 ```
 
 ##### Run with debug mode
