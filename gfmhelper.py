@@ -436,6 +436,7 @@ class GoProFrameMakerHelper():
     def getConfig():
         #read config file
         values_required = [
+            'magick_path',
             'ffmpeg_path',
             'frame_rate',
             'time_warp',
@@ -444,6 +445,7 @@ class GoProFrameMakerHelper():
             'nadir_percentage',
             'max_sphere',
             'fusion_sphere',
+            'fusion_params',
             'debug'
         ]
         data = {}
@@ -469,6 +471,7 @@ class GoProFrameMakerHelper():
 
                     default = {
                         'debug': config.getboolean('DEFAULT', 'debug'),
+                        'image_magick_path': config['DEFAULT'].get('magick_path'),
                         'ffmpeg_path': config['DEFAULT'].get('ffmpeg_path', ffmpeg),
                         'frame_rate': float(config['DEFAULT'].get('frame_rate', '0.5')),
                         'time_warp': config['DEFAULT'].get('time_warp', '5x'),
@@ -477,8 +480,9 @@ class GoProFrameMakerHelper():
                         'nadir_percentage': int(config['DEFAULT'].get('nadir_percentage')),
                         'max_sphere': config['DEFAULT'].get('max_sphere'),
                         'fusion_sphere': config['DEFAULT'].get('fusion_sphere'),
-                        'fusion_sphere_params': config['DEFAULT'].get('fusion_sphere_params')
+                        'fusion_sphere_params': config['DEFAULT'].get('fusion_params')
                     }
+                    print(default)
                     status = True
                 except:
                     status = False
@@ -502,7 +506,9 @@ class GoProFrameMakerHelper():
             'time_warp': None,
             'nadir_image': '',
             'nadir_percentage': '',
-            'debug': ''
+            'debug': '',
+            'image_magick_path': '',
+            'fusion_sphere_params': ''
         }
         errors = []
         info = []
@@ -538,11 +544,11 @@ class GoProFrameMakerHelper():
                     #camera should be fusion
                     arguments['predicted_camera'] = 'fusion'
                     #sort front/back fusion videos
-                    front = os.path.basename(args.input[0])[0:2]
-                    back = os.path.basename(args.input[1])[0:2]
-                    if((front == 'GF') and (back == 'GB')):
+                    front = os.path.basename(args.input[0])[0:4]
+                    back = os.path.basename(args.input[1])[0:4]
+                    if((front == 'GPFR') and (back == 'GPBK')):
                         args.input = [args.input[0], args.input[1]]
-                    elif((front == 'GB') and (back == 'GF')):
+                    elif((front == 'GPBK') and (back == 'GPFR')):
                         args.input = [args.input[1], args.input[0]]
                     else:
                         errors.append("Unidentified video prefix names.")
@@ -616,7 +622,7 @@ class GoProFrameMakerHelper():
             arguments["quality"] = 1
 
         #validating time warp parameter used for ffmpeg
-        if (args.time_warp is not None):
+        if (args.time_warp.strip() != ""):
             timeWarp = str(args.time_warp)
             twopts = ["2x", "5x", "10x", "15x", "30x"]
             if timeWarp not in twopts:
@@ -647,6 +653,28 @@ class GoProFrameMakerHelper():
             arguments["nadir_percentage"] = nadir_percentage
         else:
             arguments["nadir_percentage"] = 15
+
+        if(args.image_magick_path is not None):
+            if(Path(args.image_magick_path).is_file()):
+                arguments["image_magick_path"] = Path(args.image_magick_path)
+            else:
+                errors.append("{} file does not exists.".format(Path(args.fusion_sphere_params)))
+                status = False
+        else:
+            arguments["image_magick_path"] = 'magick'
+
+        if(args.fusion_sphere_params is not None):
+            if(Path(args.fusion_sphere_params).is_file()):
+                arguments["fusion_sphere_params"] = Path(args.fusion_sphere_params)
+            else:
+                errors.append("{} file does not exists.".format(Path(args.fusion_sphere_params)))
+                status = False
+        else:
+            if(Path('./params.txt').is_file()):
+                arguments["fusion_sphere_params"] = Path('./params.txt')
+            else:
+                errors.append("{} file does not exists.".format(Path('./params.txt')))
+                status = False
 
         
 
