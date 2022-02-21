@@ -62,43 +62,40 @@ def ExiftoolInjectImagesMetadata(cmdMetaDataAll):
             t.join()
     return
 
-def createNadir(nadir):
+def createNadir(nadir, magick):
+    print(nadir, magick)
     #magick trek-view-square-nadir.png -rotate 180 -strip trek-view-square-nadir-1.png
     #magick trek-view-square-nadir-1.png -distort DePolar 0  trek-view-square-nadir-2.png
     #magick trek-view-square-nadir-2.png -flip  trek-view-square-nadir-3.png
     #magick trek-view-square-nadir-3.png -flop  trek-view-square-nadir-4.png
     cmd = [
-        "magick", nadir, "-rotate", "180", "-strip", nadir
+        magick, nadir, "-rotate", "180", "-strip", nadir
     ]
     out = subprocess.run(cmd)
     print(out)
     cmd = [
-        "magick", nadir, "-distort", "DePolar", "0", "-strip", nadir
+        magick, nadir, "-distort", "DePolar", "0", "-strip", nadir
     ]
     out = subprocess.run(cmd)
     print(out)
     cmd = [
-        "magick", nadir, "-flip", "-strip", nadir
+        magick, nadir, "-flip", "-strip", nadir
     ]
     out = subprocess.run(cmd)
     print(out)
     cmd = [
-        "magick", nadir, "-flop", "-strip", nadir
+        magick, nadir, "-flop", "-strip", nadir
     ]
     out = subprocess.run(cmd)
     print(out)
     return nadir
 
-def AddNadir(image, nadir, imageData, equirectangular, height_percentage=15):
-    print('height_percentage', height_percentage)
+def AddNadir(image, nadir, magick, imageData, equirectangular, height_percentage=15):
     image_path = Path(image)
     nadir_path = Path(nadir)
 
     new_nadir_path = Path(str(image_path.parent)+os.sep+str(nadir_path.name))
-
     new_nadir_path.write_bytes(nadir_path.read_bytes())
-
-
 
     image = str(image_path.resolve())
     nadir = str(new_nadir_path.resolve())
@@ -108,7 +105,7 @@ def AddNadir(image, nadir, imageData, equirectangular, height_percentage=15):
     if equirectangular == False:
         imageWidth = "-1"
     else:
-        nadir = createNadir(nadir)
+        nadir = createNadir(nadir, magick)
         imageWidth = str(imageWidth)
     imageHeight = int(imageHeight)*(height_percentage/100)
     imageHeight = str(round(imageHeight))
@@ -129,21 +126,6 @@ def AddNadir(image, nadir, imageData, equirectangular, height_percentage=15):
     fout = subprocess.run(cmd)
     logging.info("Adding Nadir to {} is done.".format(image))
     print("Adding Nadir to {} is done.".format(image))
-
-def Nadir(images):
-    images = list(chunks(images, 5))
-
-    for image in images:
-        threads = []
-        for i in range(0, len(image)):
-            threads.append(threading.Thread(target=AddNadir, args=(image[i],)))
-
-        for t in threads:
-            t.start()
-
-        for t in threads:
-            t.join()
-    return
 
 
 class GoProFrameMakerParent():
@@ -212,8 +194,10 @@ class GoProFrameMakerParent():
         return alt
 
     def decimalDivide(self, num1, num2):
-        num1 = Decimal(round(num1, 6))
-        num2 = Decimal(round(num2, 6))
+        a = round(num1, 6)
+        b = round(num2, 6)
+        num1 = Decimal(a)
+        num2 = Decimal(b)
         if num2 == 0.0:
             return 0.0
         if num1 == 0.0:
@@ -275,8 +259,7 @@ class GoProFrameMakerParent():
 
             #print((start_latitude, start_longitude), (end_latitude, end_longitude))
             #print("AC: {}, BC: {}, azimuth1: {}, azimuth2: {}, \ntime: {}, distance: {} seconds: {}\n\n\n".format(AC, BC, azimuth1, azimuth2, Decimal(time_diff), distance, gps_epoch_seconds))
-
-            gps_elevation_change_next_meters = Decimal(end_altitude - start_altitude)
+            gps_elevation_change_next_meters = float(end_altitude - start_altitude)
             gps_velocity_east_next_meters_second = self.decimalDivide( AC, time_diff ) 
             gps_velocity_north_next_meters_second = self.decimalDivide( BC, time_diff )
             gps_velocity_up_next_meters_second = self.decimalDivide( gps_elevation_change_next_meters, time_diff )
@@ -324,7 +307,6 @@ class GoProFrameMakerParent():
                 cmd = shlex.split(" ".join(cmd))
             
             output = subprocess.run(cmd, capture_output=capture_output)
-            print(output)
             logging.info(output)
             if output.returncode == 0:
                 out = ''
@@ -336,6 +318,7 @@ class GoProFrameMakerParent():
                     "error": None
                 }
             else:
+                print(output)
                 raise Exception(output.stderr.decode('utf-8',"ignore"))
         except Exception as e:
             logging.info(str(e))
@@ -447,18 +430,18 @@ class GoProFrameMaker(GoProFrameMakerParent):
             camera = 'max'
             if((equirectangular == False) and (args['predicted_camera'] == 'max') and (fileType == '360')):
                 equirectangular = True
-        if(metadata['video_field_data']['DeviceName'] == 'GoPro Fusion'):
+        if(metadata['video_field_data']['DeviceName'].lower() in ['gopro fusion', 'fusion']):
             camera = 'fusion'
             if((equirectangular == False) and (args['predicted_camera'] == 'fusion') and (fileType == 'mp4')):
                 equirectangular = True
-
+        
         #getting frames
         if fileType == "360":
             if camera == 'max':
                 self.__breakIntoFrames360(metadata, video_file, media_folder_full_path)
             else:
                 exit('Unknown camera type.')
-        elif fileType == "mp4":
+        elif fileType in ["mp4", "mov"]:
             if camera == 'max':
                 self.__breakIntoFrames(video_file, media_folder_full_path)
             elif camera == 'fusion':
@@ -466,20 +449,21 @@ class GoProFrameMaker(GoProFrameMakerParent):
                 if os.path.exists(fusion_front):
                     shutil.rmtree(fusion_front)
                 os.makedirs(fusion_front, exist_ok=True) 
-                fusion_back = "{}{}{}".format(media_folder_full_path, os.sep, 'front')
+                fusion_back = "{}{}{}".format(media_folder_full_path, os.sep, 'back')
                 if os.path.exists(fusion_back):
                     shutil.rmtree(fusion_back)
                 os.makedirs(fusion_back, exist_ok=True) 
                 self.__breakIntoFrames(video_file_front, fusion_front, '')
                 self.__breakIntoFrames(video_file_back, fusion_back, '')
+                total_images = fnmatch.filter(os.listdir(fusion_front), '*.jpg')
                 cmd = [
-                    args['fusion_sphere'], '-w', str(4096), '-b', '5', 
+                    str(args['fusion_sphere'].resolve()), '-w', str(4096), '-b', '5',
+                    '-g', '1', '-h', str(len(total_images)), 
                     '-x', "{}{}%06d.jpg".format(fusion_front, os.sep), "{}{}%06d.jpg".format(fusion_back, os.sep),
                     '-o', "{}{}%06d.jpg".format(media_folder_full_path, os.sep),
-                    args['fusion_sphere_params']
+                    str(args['fusion_sphere_params'].resolve())
                 ]
                 output = subprocess.run(cmd, capture_output=True)
-
                 if os.path.exists(fusion_front):
                     shutil.rmtree(fusion_front)
                 if os.path.exists(fusion_back):
@@ -566,8 +550,8 @@ class GoProFrameMaker(GoProFrameMakerParent):
             logging.warning("It appears this video was captured in timewarp mode. You can continue, but the images in the Sequence might not render as expected.")
             print("It appears this video was captured in timewarp mode. You can continue, but the images in the Sequence might not render as expected.")
 
-        FileType = ["MP4", "360"]
-        if videoData["FileType"].strip() not in FileType:
+        FileType = ["MP4", "360", "MOV"]
+        if videoData["FileType"].strip().upper() not in FileType:
             logging.critical("The following filetype {} is not supported. Please upload only .mp4 or .360 videos.".format(videoData["FileType"]))
             exit("The following filetype {} is not supported. Please upload only .mp4 or .360 videos.".format(videoData["FileType"]))
         else:
@@ -804,10 +788,16 @@ class GoProFrameMaker(GoProFrameMakerParent):
                 if '.' not in videoFieldData['Duration']:
                     videoFieldData['Duration'] = "{}.000".format(videoFieldData['Duration'].strip())
 
-        output = self.__gpsTimestamps(gpsData, videoFieldData)
+        output = GoProFrameMakerHelper.gpsTimestamps(gpsData, videoFieldData)
+        args = self.getArguments()
+        output["filename"] = "{}{}{}_video.gpx".format(args["media_folder_full_path"], os.sep, args["media_folder"])
+        self.__saveAFile(output["filename"], output['gpx_data'])
+        if(Path(output["filename"]).is_file() == False):
+            exit('Unable to save file: {}'.format(output["filename"]))
+
         return {
             "filename": output["filename"],
-            "startTime": output["startTime"],
+            "startTime": output["start_time"],
             "video_field_data": videoFieldData
         }
 
@@ -999,7 +989,7 @@ class GoProFrameMaker(GoProFrameMakerParent):
         if args["nadir_image"] != "":
             for image in data['images']:
                 nadir_image = "{}{}{}".format(media_folder_full_path, os.sep, image)
-                AddNadir(nadir_image, args["nadir_image"], imageData[image], equirectangular, int(args["nadir_percentage"]))
+                AddNadir(nadir_image, args["nadir_image"], args["image_magick_path"], imageData[image], equirectangular, int(args["nadir_percentage"]))
 
         counter = 0
         for img in data['images']:
