@@ -523,7 +523,7 @@ class GoProFrameMakerHelper():
             if (args.max_sphere is not None):
                 arguments['max_sphere'] = Path(args.max_sphere)
                 if(arguments['max_sphere'].is_file() == False):
-                    errors.append("{} path does not exists at {}. Please make sure you used correct path!".format(args.max_sphere, str(arguments['max2sphere'].resolve())))
+                    errors.append("{} path does not exists at {}. Please make sure you used correct path!".format(args.max_sphere, str(arguments['max_sphere'].resolve())))
                     status = False
             else:
                 info.append("No max2sphere binary is present starting processing without it.")
@@ -537,7 +537,7 @@ class GoProFrameMakerHelper():
             if(args.fusion_sphere is not None):
                 arguments['fusion_sphere'] = Path(args.fusion_sphere)
                 if(arguments['fusion_sphere'].is_file() == False):
-                    errors.append("{} path does not exists at {}. Please make sure you used correct path!".format(args.fusion_sphere, str(arguments['fusion2sphere'].resolve())))
+                    errors.append("{} path does not exists at {}. Please make sure you used correct path!".format(args.fusion_sphere, str(arguments['fusion_sphere'].resolve())))
                     status = False
                 else:
                     #camera should be fusion
