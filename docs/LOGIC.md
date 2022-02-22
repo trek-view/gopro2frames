@@ -19,7 +19,17 @@ For dual GoPro Fisheye videos, this data is in the front video file.
 
 If the script fails this check, you will see an error returned.
 
-## 2 Validate mode vs video metadata
+## 2. Extract metadata from video
+
+Done using exiftool:
+
+```shell
+$ exiftool -ee -G3 -api LargeFileSupport=1 -X IN_VIDEO.mp4 > VIDEO_META.xml
+```
+
+Note, if dual fisheyes, uses the front image (`GBFR`) for extraction.
+
+## 3 Validate mode vs video metadata
 
 In order to process the video in the correct flow, the following logic is checked against mode input.
 
@@ -82,16 +92,6 @@ If all validations pass, send to equirectangular frame pipeline.
 </tbody></table>
 
 If all validations pass, send to HERO frame pipeline.
-
-## 3. Extract metadata from video
-
-Done using exiftool:
-
-```shell
-$ exiftool -ee -G3 -api LargeFileSupport=1 -X IN_VIDEO.mp4 > VIDEO_META.xml
-```
-
-Note, if dual fisheyes, uses the front image (`GBFR`) for extraction.
 
 ## 4. Calculate un-timed GPS points
 
