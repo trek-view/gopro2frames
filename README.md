@@ -87,22 +87,27 @@ debug=
 
 * `mode`: determines input type (and processing steps). Either `equirectangular` for 360 .mp4's, `hero` for normal mp4's, `dualfish` for two Fusion fisheye videos, `eac` for MAX .360 files
 	* default: none (you must set a value for this)
+	* options: `equirectangular`,`hero`,`eac`,`dualfish`
 * `magick_path`: path to imagemagick
 	* default (if left blank): assumes imagemagick is installed globally
 * `ffmpeg_path` (if left blank): path to ffmpeg
 	* default: assumes ffmpeg is installed globally
 * `frame_rate`: sets the frame rate (frames per second) for extraction,
 	* default: `1`
+	* options: `0.1`,`0.2`,`0.5`,`1`,`2`,`3`,`4`,`5`
 * `quality`: sets the extracted quality between 1-6. 1 being the highest quality (but slower processing). This is value used for ffmpeg `-q:v` flag.
 	* default: `1`
-* `time_warp`: You NEED to use this if video was shot in timewarp mode, else telemetry will be inaccurate. The script does not support timewarp mode set to Auto (because it's impossible to determine the capture rate). Set the timewarp speed used when shooting in this field, either `2x`, `5x`, `10x`, `15x`, `30x`
+	* options: `1`,`2`,`3`,`4`,`5`,`6`
+* `time_warp`: You NEED to use this if video was shot in timewarp mode, else telemetry will be inaccurate. The script does not support timewarp mode set to Auto (because it's impossible to determine the capture rate). Set the timewarp speed used when shooting in this field
 	* default: blank (not timewarp)
+	* options: `2x`, `5x`, `10x`, `15x`, `30x`
 * `logo_image`: Path to logofile used for nadir / watermark
 	* default: blank (do not add logo)
 * `logo_percentage`: overlay size of nadir / watermark between 8 - 20, in increments of 1.
 	* default: 12 (only used if `logo_image` set)
-* `debug`: enable debug mode. True of false
+* `debug`: enable debug mode.
 	* Default: `FALSE`
+	* options: `TRUE`,`FALSE`
 
 ## Test cases
 
