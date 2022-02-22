@@ -65,31 +65,41 @@ If using config.ini file only videos (1 video in case of max, and 2 videos in ca
 ### Options
 
 ```
-$ python3 gfm.py [options] VIDEO_NAME.mp4
+$ python3 gfm.py VIDEO_NAME.mp4
 ```
 
-Options:
+You can set all opitons in the [`config.ini`] file.
 
-* `-r` n sets the frame rate (frames per second) for extraction, default: `5`. Options available:
-	* `1`
-	* `2` 
-	* `5`
-* `-q` n sets the extracted quality between 2-6. 1 being the highest quality (but slower processing), default: 1. This is value used for ffmpeg `-q:v` flag. Options available:
-	* `1`
-	* `2` 
-	* `3`
-	* `4`
-	* `5`
-* `-t` enables timewarp mode. You NEED to use this if video was shot in timewarp mode, else telemetry will be inaccurate. The script does not support timewarp mode set to Auto (because it's impossible to determine the capture rate). No default
-	* `2x`
-	* `5x`
-	* `10x`
-	* `15x`
-	* `30x`
-* `-m` custom MAX2Sphere path, default: ./MAX2sphere/MAX2sphere
-* `-f` custom ffmpeg install path, default: default binding
-* `-n` nadir/watermark logo path and size (between 12 - 20, in increments of 1. see: Nadir/watermark section below for more info) default: none
-* `-d` enable debug mode, default: false. If flag is passed, will be set to true.
+The file has the following structure:
+
+```
+[DEFAULT]
+magick_path=
+ffmpeg_path=
+frame_rate=
+time_warp=
+quality=
+logo_image=
+logo_percentage=
+debug=
+```
+
+* `magick_path`: path to imagemagick
+	* default (if left blank): assumes imagemagick is installed globally
+* `ffmpeg_path` (if left blank): path to ffmpeg
+	* default: assumes ffmpeg is installed globally
+* `frame_rate`: sets the frame rate (frames per second) for extraction,
+	* default: `1`
+* `quality`: sets the extracted quality between 1-6. 1 being the highest quality (but slower processing). This is value used for ffmpeg `-q:v` flag.
+	* default: `1`
+* `time_warp`: You NEED to use this if video was shot in timewarp mode, else telemetry will be inaccurate. The script does not support timewarp mode set to Auto (because it's impossible to determine the capture rate). Set the timewarp speed used when shooting in this field, either `2x`, `5x`, `10x`, `15x`, `30x`
+	* default: blank (not timewarp)
+* `logo_image`: Path to logofile used for nadir / watermark
+	* default: blank (do not add logo)
+* `logo_percentage`: overlay size of nadir / watermark between 8 - 20, in increments of 1.
+	* default: 12 (only used if `logo_image` set)
+* `debug`: enable debug mode. True of false
+	* Default: `FALSE`
 
 ## Test cases
 
@@ -107,11 +117,12 @@ To run all the tests, run:
 python -m unittest discover tests -p '*_tests.py'
 ```
 
-
-
 ### Camera support
 
-This video only accepts mp4 videos shot on a GoPro cameras.
+This scripte only accepts videos:
+
+* Must be shot on GoPro camera
+* Must have telemetry (GPS enabled when shooting)
 
 It supports both 360 and non-360 videos. In the case of 360 videos, these must be processed by GoPro Software to final mp4 versions.
 
@@ -126,15 +137,6 @@ This script has currently been tested with the following GoPro cameras:
 
 It is very likely that older cameras are also supported, but we provide no support for these as they have not been tested.
 
-### Test cases
-
-[A full library of sample files for each camera can be accessed here](https://guides.trekview.org/explorer/developer-docs/sequences/capture).
-
-### Video requirements
-
-* Must be shot on GoPro camera
-* Must have telemetry (GPS enabled when shooting)
-
 ### Logic
 
 The general processing pipeline of gopro-frame-maker is as follows;
@@ -145,27 +147,79 @@ The general processing pipeline of gopro-frame-maker is as follows;
 
 [To read how this script works in detail, please read this post](/docs/LOGIC.md).
 
+### Test cases
+
+[A full library of sample files for each camera can be accessed here](https://guides.trekview.org/explorer/developer-docs/sequences/capture).
+
 #### Examples (MacOS)
 
 ##### Extract at a frame rate of 1 FPS
 
 ```
-$ python3 gfm.py -r 1 samples/GS018422.mp4
+[DEFAULT]
+magick_path=
+ffmpeg_path=
+frame_rate= 1
+time_warp=
+quality= 1
+logo_image=
+logo_percentage=
+debug=
+```
+
+```
+$ python3 gfm.py samples/GS018422.mp4
 ```
 
 ##### Run with debug mode
 
 ```
-$ python3 gfm.py -d GS018422.mp4
+[DEFAULT]
+magick_path=
+ffmpeg_path=
+frame_rate= 1
+time_warp=
+quality= 1
+logo_image=
+logo_percentage=
+debug=TRUE
+```
+
+```
+$ python3 gfm.py GS018422.mp4
 ```
 
 ##### Extract frames at lowest quality
 
 ```
-$ python3 gfm.py -q 5 GS018422.mp4
+[DEFAULT]
+magick_path=
+ffmpeg_path=
+frame_rate= 1
+time_warp=
+quality= 6
+logo_image=
+logo_percentage=
+debug=TRUE
+```
+
+```
+$ python3 gfm.py GS018422.mp4
 ```
 
 ##### Extract from a timewarp video shot at 5x speed
+
+```
+[DEFAULT]
+magick_path=
+ffmpeg_path=
+frame_rate= 1
+time_warp= 5x
+quality= 1
+logo_image=
+logo_percentage=
+debug=TRUE
+```
 
 ```
 $ python3 gfm.py -t 5x GS018422.mp4
@@ -174,16 +228,34 @@ $ python3 gfm.py -t 5x GS018422.mp4
 ##### Use a custom ffmpeg path
 
 ```
-python3 gfm.py -f /Users/dgreenwood/bin/ffmpeg GS018422.mp4
+[DEFAULT]
+magick_path=
+ffmpeg_path= /Users/dgreenwood/bin/ffmpeg
+frame_rate= 1
+time_warp= 
+quality= 1
+logo_image=
+logo_percentage=
+debug=TRUE
 ```
 
-##### Use a custom MAX2Sphere path
-
 ```
-python3 gfm.py -m /Users/dgreenwood/bin/MAX2sphere/MAX2sphere GS018422.mp4
+python3 gfm.py GS018422.mp4
 ```
 
 ##### Add a custom nadir
+
+```
+[DEFAULT]
+magick_path=
+ffmpeg_path=
+frame_rate= 1
+time_warp= 
+quality= 1
+logo_image= /Users/dgreenwood/logo/trekview.png
+logo_percentage= 12
+debug=TRUE
+```
 
 ```
 python3 gfm.py -n /Users/dgreenwood/logo/trekview.png -p 12 GS018422.mp4
