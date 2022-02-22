@@ -19,9 +19,9 @@ For dual GoPro Fisheye videos, this data is in the front video file.
 
 If the script fails this check, you will see an error returned.
 
-## 2. Identify mode video type
+## 2 Validate mode vs video metadata
 
-In order to process the video in the correct flow, the following logic is checked
+In order to process the video in the correct flow, the following logic is checked against mode input.
 
 **Identify GoPro EAC .360**
 

@@ -74,6 +74,7 @@ The file has the following structure:
 
 ```
 [DEFAULT]
+mode=
 magick_path=
 ffmpeg_path=
 frame_rate=
@@ -84,6 +85,8 @@ logo_percentage=
 debug=
 ```
 
+* `mode`: determines input type (and processing steps). Either `equirectangular` for 360 .mp4's, `hero` for normal mp4's, `dualfish` for two Fusion fisheye videos, `eac` for MAX .360 files
+	* default: none (you must set a value for this)
 * `magick_path`: path to imagemagick
 	* default (if left blank): assumes imagemagick is installed globally
 * `ffmpeg_path` (if left blank): path to ffmpeg
