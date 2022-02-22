@@ -145,66 +145,6 @@ The general processing pipeline of gopro-frame-maker is as follows;
 
 [To read how this script works in detail, please read this post](/docs/LOGIC.md).
 
-### Validation
-
-To ensure the video can be processed, the following metadata check is applied.
-
-**1. Video contains GoPro telemetry**
-
-We check video contains telemetry from GoPro by identifying the following metatag `<TrackN:MetaFormat>gpmd</TrackN:MetaFormat>`. _Note: TrackN where N = track number, which varies between GoPro cameras._ 
-
-For dual GoPro Fisheye videos, this data is in the front video file.
-
-If the script fails this check, you will see an error returned.
-
-### Identify correct pipeline
-
-In order to process the video in the correct flow, the following logic is checked
-
-**Identify GoPro EAC .360**
-
-It is possible to identify .360 files by searching for the following metatag `<Track1:CompressorName>H.265 encoder</Track1:CompressorName>`. _Note: TrackN where N = track number, which varies between GoPro cameras._ 
-
-If true, pass to MAX2Sphere frame pipeline.
-
-**Identify dual GoPro Fisheye**
-
-It is possible to identify dual GoPro fisheyes by checking `ImageWidth` and `ImageHeight` of both videos. They should be either 2 videos = 2704 (w) x 2624 (h) OR 2 videos (w) = 1568 x 1504 (h)
-
-If true, pass to fusion2sphere frame pipeline.
-
-**Identify equirectangular mp4**
-
-For .mp4 videos we can determine video is spherical (equirectangular) if it contains the following metatag `<XMP-GSpherical:ProjectionType>equirectangular</XMP-GSpherical:ProjectionType>`.
-
-If true, pass to equirectangular frame pipeline.
-
-**Identify equirectangular mp4**
-
-Non-spherical mp4s can be identified if no `XMP-GSpherical:ProjectionType` tag is present.
-
-If true, pass to HERO frame pipeline.
-
-### Nadir / watermark
-
-A square file to be used as a nadir (for equirectangular) or watermark (for flat) images can be passed to be used in the image. This feature is useful for adding a custom logo to extracted frame.
-
-Nadir/watermark logo must be:
-
-* <= 5mb
-* .png
-* square dimensions (with edges > 500 px)
-
-You also need to pass nadir/watermark size a a % of image height. For example, passing `-n /path/to/nadir/logo.png 20` will result in the nadir/watermark having dimensions 20% of image height.
-
-_Example of nadir image height (equirectangular)_
-
-![](/docs/example-nadir-percentage-of-pano.jpeg)
-
-_Example of watermark image height (non-equirectangular)_
-
-![](/docs/example-watermark-percentage-of-photo.jpeg)
-
 #### Examples (MacOS)
 
 ##### Extract at a frame rate of 1 FPS
