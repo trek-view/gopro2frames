@@ -141,9 +141,9 @@ The general processing pipeline of gopro-frame-maker is as follows;
 
 ![](/docs/gopro-frame-maker-flow.jpg)
 
-[Image source here](https://docs.google.com/presentation/d/1Te7oUaPmlulYsZE6nqITC_sLjfDzDxwTmT5uM_EmXW8/edit#slide=id.p)
+[Image source here](https://docs.google.com/drawings/d/1i6givGQnGsu7dW2fLt3qVSWaHDiP0TCciY_DtY5_mc4/edit)
 
-[To read how this script works in detail, read this post](https://guides.trekview.org/explorer/developer-docs/sequence-functions/process/gopro-video-telemetry).
+[To read how this script works in detail, please read this post](/docs/LOGIC.md).
 
 ### Validation
 
