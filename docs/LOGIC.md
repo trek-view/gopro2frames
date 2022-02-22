@@ -23,29 +23,65 @@ If the script fails this check, you will see an error returned.
 
 In order to process the video in the correct flow, the following logic is checked against mode input.
 
-**Identify GoPro EAC .360**
+[Note, tables in spreadsheet form here](https://docs.google.com/spreadsheets/d/1x9WnLwPHZIKRyfKkCW2ORVprpsAlA3c2hqVu4S9yIaY/edit#gid=967778760)
 
-It is possible to identify .360 files by searching for the following metatag `<Track1:CompressorName>H.265 encoder</Track1:CompressorName>`. _Note: TrackN where N = track number, which varies between GoPro cameras._ 
+**Identify GoPro EAC .360 (mode=`eac`)**
 
-If true, pass to MAX2Sphere frame pipeline.
+<table class="tableizer-table">
+<thead><tr class="tableizer-firstrow"><th>id</th><th>Required</th><th>Error message</th></tr></thead><tbody>
+ <tr><td>val-EAC-01</td><td>is .360</td><td>The following filetype [FILETYPE] is not supported. Please upload only unstitched .360s</td></tr>
+ <tr><td>val-EAC-02</td><td>>= 10 seconds</td><td>The following file [FILE] is not long enough. The minimum video length is 10 seconds</td></tr>
+ <tr><td>val-EAC-03</td><td>Is GoPro 360 format <Track1:CompressorName>H.265 encoder</Track1:CompressorName> . Note, do not use filetype field in metadata for this (it shows as mp4).</td><td>The following filetype [FILETYPE] is not supported. Please upload only .mp4 or .360 videos.</td></tr>
+ <tr><td>val-EAC-04</td><td>Has GoPro telemetry:<TrackN:MetaFormat>gpmd</TrackN:MetaFormat>. The Track with MetaFormat=gmpd can be used to identify the telemetry track.</td><td>Your video has no required GoPro telemetry. Are you sure it was shot on a GoPro?</td></tr>
+ <tr><td>val-EAC-05</td><td>At least one GPS Measure Mode tag DOES NOT =unknown (and tag actually exists)</td><td>It appears GPS was disabled, or was unable to find a stable lock during this video.</td></tr>
+</tbody></table>
 
-**Identify dual GoPro Fisheye**
+If all validations pass, send to MAX2Sphere frame pipeline.
 
-It is possible to identify dual GoPro fisheyes by checking `ImageWidth` and `ImageHeight` of both videos. They should be either 2 videos = 2704 (w) x 2624 (h) OR 2 videos (w) = 1568 x 1504 (h)
+**Identify dual GoPro Fisheye (mode=`fisheye`)**
 
-If true, pass to fusion2sphere frame pipeline.
+<table class="tableizer-table">
+<thead><tr class="tableizer-firstrow"><th>id</th><th>Required</th><th>Error message</th></tr></thead><tbody>
+ <tr><td>val-FISH-01</td><td>both files are .mp4</td><td>The following filetype [FILETYPE] is not supported. Please upload only unstitched .mp4s</td></tr>
+ <tr><td>val-FISH-02</td><td>Must include GPBK and GPFR file pair prefix with same number</td><td>Note, the files must retain the same name as generated on the camera. If you have renamed the files in anyway, they will not work.</td></tr>
+ <tr><td>val-FISH-03</td><td>Video shot on GoPro Fusion, Front video <Track3:DeviceName> contains  Fusion</td><td>Only dual mp4 content taken using a GoPro Fusion Camera is currently supported.</td></tr>
+ <tr><td>val-FISH-04</td><td>>=10 seconds</td><td>The following file [FILE] is not long enough. The minimum video length is 10 seconds</td></tr>
+ <tr><td>val-FISH-05</td><td>Front video has GoPro telemetry:<Trackn:MetaFormat>gpmd</Trackn:MetaFormat>in front video</td><td>Your video has no required GoPro telemetry. Are you sure it was shot on a GoPro?</td></tr>
+ <tr><td>val-FISH-06</td><td>Video does not have XMP-GSpherical:StitchingSoftware tag</td><td>Your video appears to be stitched. Either select a stitched mode, or provide unstitched content only.</td></tr>
+ <tr><td>val-FISH-07</td><td>Video does not have XMP-GSpherical:ProjectionType tag</td><td>Your video appears to be 360. Either select a stitched mode, or provide unstitched content only.</td></tr>
+ <tr><td>val-FISH-08</td><td>Both video files are same resolution</td><td>The videos supplied are not correct. The have different resolutions.</td></tr>
+ <tr><td>val-FISH-09</td><td>At least one GPS Measure Mode tag DOES NOT =unknown (and tag actually exists)</td><td>It appears GPS was disabled, or was unable to find a stable lock during this video.</td></tr>
+</tbody></table>
 
-**Identify equirectangular mp4**
+If all validations pass, send to Fusion2Sphere frame pipeline.
 
-For .mp4 videos we can determine video is spherical (equirectangular) if it contains the following metatag `<XMP-GSpherical:ProjectionType>equirectangular</XMP-GSpherical:ProjectionType>`.
+**Identify equirectangular mp4 (mode=`equirectangular`)**
 
-If true, pass to equirectangular frame pipeline.
+<table class="tableizer-table">
+<thead><tr class="tableizer-firstrow"><th>id</th><th>Required</th><th>Error message</th></tr></thead><tbody>
+ <tr><td>val-EQUI-01</td><td>is .mp4</td><td>The following filetype [FILETYPE] is not supported. Please upload only .mp4 or .360 videos.</td></tr>
+ <tr><td>val-EQUI-02</td><td>>=10 seconds</td><td>The following file [FILE] is not long enough. The minimum video length is 10 seconds</td></tr>
+ <tr><td>val-EQUI-03</td><td>Has GoPro telemetry:<TrackN:MetaFormat>gpmd</TrackN:MetaFormat>. The Track with MetaFormat=gmpd can be used to identify the telemetry track.</td><td>Your video has no required GoPro telemetry. Are you sure it was shot on a GoPro?</td></tr>
+ <tr><td>val-EQUI-04</td><td>Video has value for XMP-GSpherical:StitchingSoftware</td><td>Your video does not appear to be stitched. Either select an unstitched mode, or stitch using GoPro software before continuing.</td></tr>
+ <tr><td>val-EQUI-05</td><td>Video has value XMP-GSpherical:ProjectionType is equirectangular</td><td>Your video does not appear to be 360. Please choose a non-360 mode, or remove non-360 images.</td></tr>
+ <tr><td>val-EQUI-06</td><td>At least one GPS Measure Mode tag DOES NOT =unknown (and tag actually exists)</td><td>It appears GPS was disabled, or was unable to find a stable lock during this video.</td></tr>
+</tbody></table>
 
-**Identify HERO mp4**
+If all validations pass, send to equirectangular frame pipeline.
 
-Non-spherical mp4s can be identified if no `XMP-GSpherical:ProjectionType` tag is present.
+**Validate HERO mp4 (mode=`hero`)**
 
-If true, pass to HERO frame pipeline.
+<table class="tableizer-table">
+<thead><tr class="tableizer-firstrow"><th>id</th><th>Required</th><th>Error message</th></tr></thead><tbody>
+ <tr><td>val-HERO-01</td><td>is mp4</td><td>The following filetype [FILETYPE] is not supported. Please upload only unstitched .mp4s</td></tr>
+ <tr><td>val-HERO-02</td><td>>=10 seconds</td><td>The following file [FILE] is not long enough. The minimum video length is 10 seconds</td></tr>
+ <tr><td>val-HERO-03</td><td>Has GoPro telemetry:<TrackN:MetaFormat>gpmd</TrackN:MetaFormat>. The Track with MetaFormat=gmpd can be used to identify the telemetry track.</td><td>Your video has no required GoPro telemetry. Are you sure it was shot on a GoPro?</td></tr>
+ <tr><td>val-HERO-04</td><td>Video does not have XMP-GSpherical:StitchingSoftware tag</td><td>Your video appears to be 360. Either select a 360 mode, or upload content shot in HERO mode.</td></tr>
+ <tr><td>val-HERO-05</td><td>Video does not have XMP-GSpherical:ProjectionType tag</td><td>Your video appears to be 360. Either select a 360 mode, or upload content shot in HERO mode.</td></tr>
+ <tr><td>val-HERO-06</td><td>At least one GPS Measure Mode tag DOES NOT =unknown (and tag actually exists)</td><td>It appears GPS was disabled, or was unable to find a stable lock during this video.</td></tr>
+</tbody></table>
+
+If all validations pass, send to HERO frame pipeline.
 
 ## 3. Extract metadata from video
 
