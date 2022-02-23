@@ -27,23 +27,13 @@ This repo:
 ```
 $ git clone https://github.com/trek-view/gopro-frame-maker
 $ cd gopro-frame-maker
-```
-
-### Note for GoPro MAX Users
-
-If you plan to use .360 videos with this script, you must clone our MAX2Sphere script
-
-```
-$ git clone https://github.com/trek-view/MAX2sphere
-$ cd MAX2sphere
+$ git clone https://github.com/trek-view/max2sphere
+$ cd max2sphere
 $ make -f Makefile
-```
-
-_See MAX2Sphere repo for full install information._
-
-Wait for it to build and then go back to your main directory
-
-```
+$ cd ..
+$ git clone https://github.com/trek-view/fusion2sphere
+$ cd fusion2sphere
+$ make -f Makefile
 $ cd ..
 ```
 
@@ -70,10 +60,9 @@ $ python3 gfm.py VIDEO_NAME.mp4
 
 You can set all opitons in the [`config.ini`] file.
 
-The file has the following structure:
-
 ```
 [DEFAULT]
+name=
 mode=
 magick_path=
 ffmpeg_path=
@@ -85,6 +74,9 @@ logo_percentage=
 debug=
 ```
 
+* `name`: sequence name
+	* default: none (you must set a value for this)
+	* options: `a-z`,`1-3`,`-`,`_` chars only
 * `mode`: determines input type (and processing steps). Either `equirectangular` for 360 .mp4's, `hero` for normal mp4's, `dualfish` for two Fusion fisheye videos, `eac` for MAX .360 files
 	* default: none (you must set a value for this)
 	* options: `equirectangular`,`hero`,`eac`,`dualfish`
@@ -149,7 +141,7 @@ It is very likely that older cameras are also supported, but we provide no suppo
 
 The general processing pipeline of gopro-frame-maker is as follows;
 
-![](/docs/gopro-frame-maker-flow.jpg)
+![](/docs/gopro-frame-maker-video-flow.jpg)
 
 [Image source here](https://docs.google.com/drawings/d/1i6givGQnGsu7dW2fLt3qVSWaHDiP0TCciY_DtY5_mc4/edit)
 

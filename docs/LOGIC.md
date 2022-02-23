@@ -1,25 +1,50 @@
-## How it works
+# How it works
 
 The following describes how the script works at each step.
 
-![](/docs/gopro-frame-maker-flow.jpg)
+![](/docs/gopro-frame-maker-video-flow.jpg)
 
 [Image source here](https://docs.google.com/drawings/d/1i6givGQnGsu7dW2fLt3qVSWaHDiP0TCciY_DtY5_mc4/edit)
 
+![](/docs/gopro-frame-maker-image-flow.jpg)
 
-## 1. Check for GPMD
+[Image source here](https://docs.google.com/drawings/d/1_bgjyKFX_20Ub2uJpnhWTua8xdOuvgiJ0DsocW5Q988/edit?usp=sharing)
 
-To ensure the video can be processed, the following metadata check is applied.
+# Video input
 
-**Video contains GoPro telemetry**
+## 1. User defines video and script settings
 
-We check video contains telemetry from GoPro by identifying the following metatag `<TrackN:MetaFormat>gpmd</TrackN:MetaFormat>`. _Note: TrackN where N = track number, which varies between GoPro cameras._ 
+Users sets desired settings and input held in config.ini
 
-For dual GoPro Fisheye videos, this data is in the front video file.
+## 2 Validate mode vs video metadata
 
-If the script fails this check, you will see an error returned.
+In order to process the video in the correct flow, the following logic is checked against mode input.
 
-## 2. Extract metadata from video
+**Validate GoPro EAC .360 (mode=`video`+`eac`)**
+
+See validations: https://docs.google.com/spreadsheets/d/1x9WnLwPHZIKRyfKkCW2ORVprpsAlA3c2hqVu4S9yIaY/edit#gid=428268485
+
+If all validations pass, send to MAX2Sphere frame pipeline.
+
+**Validate dual GoPro Fisheye (mode=`video`+`fisheye`)**
+
+See validations: https://docs.google.com/spreadsheets/d/1x9WnLwPHZIKRyfKkCW2ORVprpsAlA3c2hqVu4S9yIaY/edit#gid=2125124048
+
+If all validations pass, send to Fusion2Sphere frame pipeline.
+
+**Validate equirectangular mp4 (mode=`video`+`equirectangular`)**
+
+See validations: https://docs.google.com/spreadsheets/d/1x9WnLwPHZIKRyfKkCW2ORVprpsAlA3c2hqVu4S9yIaY/edit#gid=967778760
+
+If all validations pass, send to equirectangular frame pipeline.
+
+**Validate HERO mp4 (mode=`video`+`hero`)**
+
+See validations: https://docs.google.com/spreadsheets/d/1x9WnLwPHZIKRyfKkCW2ORVprpsAlA3c2hqVu4S9yIaY/edit#gid=0
+
+If all validations pass, send to HERO frame pipeline.
+
+## 3. Extract metadata from video
 
 Done using exiftool:
 
@@ -28,70 +53,6 @@ $ exiftool -ee -G3 -api LargeFileSupport=1 -X IN_VIDEO.mp4 > VIDEO_META.xml
 ```
 
 Note, if dual fisheyes, uses the front image (`GBFR`) for extraction.
-
-## 3 Validate mode vs video metadata
-
-In order to process the video in the correct flow, the following logic is checked against mode input.
-
-[Note, tables in spreadsheet form here](https://docs.google.com/spreadsheets/d/1x9WnLwPHZIKRyfKkCW2ORVprpsAlA3c2hqVu4S9yIaY/edit#gid=967778760)
-
-**Identify GoPro EAC .360 (mode=`eac`)**
-
-<table class="tableizer-table">
-<thead><tr class="tableizer-firstrow"><th>id</th><th>Required</th><th>Error message</th></tr></thead><tbody>
- <tr><td>val-EAC-01</td><td>is .360</td><td>The following filetype [FILETYPE] is not supported. Please upload only unstitched .360s</td></tr>
- <tr><td>val-EAC-02</td><td>>= 10 seconds</td><td>The following file [FILE] is not long enough. The minimum video length is 10 seconds</td></tr>
- <tr><td>val-EAC-03</td><td>Is GoPro 360 format <Track1:CompressorName>H.265 encoder</Track1:CompressorName> . Note, do not use filetype field in metadata for this (it shows as mp4).</td><td>The following filetype [FILETYPE] is not supported. Please upload only .mp4 or .360 videos.</td></tr>
- <tr><td>val-EAC-04</td><td>Has GoPro telemetry:<TrackN:MetaFormat>gpmd</TrackN:MetaFormat>. The Track with MetaFormat=gmpd can be used to identify the telemetry track.</td><td>Your video has no required GoPro telemetry. Are you sure it was shot on a GoPro?</td></tr>
- <tr><td>val-EAC-05</td><td>At least one GPS Measure Mode tag DOES NOT =unknown (and tag actually exists)</td><td>It appears GPS was disabled, or was unable to find a stable lock during this video.</td></tr>
-</tbody></table>
-
-If all validations pass, send to MAX2Sphere frame pipeline.
-
-**Identify dual GoPro Fisheye (mode=`fisheye`)**
-
-<table class="tableizer-table">
-<thead><tr class="tableizer-firstrow"><th>id</th><th>Required</th><th>Error message</th></tr></thead><tbody>
- <tr><td>val-FISH-01</td><td>both files are .mp4</td><td>The following filetype [FILETYPE] is not supported. Please upload only unstitched .mp4s</td></tr>
- <tr><td>val-FISH-02</td><td>Must include GPBK and GPFR file pair prefix with same number</td><td>Note, the files must retain the same name as generated on the camera. If you have renamed the files in anyway, they will not work.</td></tr>
- <tr><td>val-FISH-03</td><td>Video shot on GoPro Fusion, Front video <Track3:DeviceName> contains  Fusion</td><td>Only dual mp4 content taken using a GoPro Fusion Camera is currently supported.</td></tr>
- <tr><td>val-FISH-04</td><td>>=10 seconds</td><td>The following file [FILE] is not long enough. The minimum video length is 10 seconds</td></tr>
- <tr><td>val-FISH-05</td><td>Front video has GoPro telemetry:<Trackn:MetaFormat>gpmd</Trackn:MetaFormat>in front video</td><td>Your video has no required GoPro telemetry. Are you sure it was shot on a GoPro?</td></tr>
- <tr><td>val-FISH-06</td><td>Video does not have XMP-GSpherical:StitchingSoftware tag</td><td>Your video appears to be stitched. Either select a stitched mode, or provide unstitched content only.</td></tr>
- <tr><td>val-FISH-07</td><td>Video does not have XMP-GSpherical:ProjectionType tag</td><td>Your video appears to be 360. Either select a stitched mode, or provide unstitched content only.</td></tr>
- <tr><td>val-FISH-08</td><td>Both video files are same resolution</td><td>The videos supplied are not correct. The have different resolutions.</td></tr>
- <tr><td>val-FISH-09</td><td>At least one GPS Measure Mode tag DOES NOT =unknown (and tag actually exists)</td><td>It appears GPS was disabled, or was unable to find a stable lock during this video.</td></tr>
-</tbody></table>
-
-If all validations pass, send to Fusion2Sphere frame pipeline.
-
-**Identify equirectangular mp4 (mode=`equirectangular`)**
-
-<table class="tableizer-table">
-<thead><tr class="tableizer-firstrow"><th>id</th><th>Required</th><th>Error message</th></tr></thead><tbody>
- <tr><td>val-EQUI-01</td><td>is .mp4</td><td>The following filetype [FILETYPE] is not supported. Please upload only .mp4 or .360 videos.</td></tr>
- <tr><td>val-EQUI-02</td><td>>=10 seconds</td><td>The following file [FILE] is not long enough. The minimum video length is 10 seconds</td></tr>
- <tr><td>val-EQUI-03</td><td>Has GoPro telemetry:<TrackN:MetaFormat>gpmd</TrackN:MetaFormat>. The Track with MetaFormat=gmpd can be used to identify the telemetry track.</td><td>Your video has no required GoPro telemetry. Are you sure it was shot on a GoPro?</td></tr>
- <tr><td>val-EQUI-04</td><td>Video has value for XMP-GSpherical:StitchingSoftware</td><td>Your video does not appear to be stitched. Either select an unstitched mode, or stitch using GoPro software before continuing.</td></tr>
- <tr><td>val-EQUI-05</td><td>Video has value XMP-GSpherical:ProjectionType is equirectangular</td><td>Your video does not appear to be 360. Please choose a non-360 mode, or remove non-360 images.</td></tr>
- <tr><td>val-EQUI-06</td><td>At least one GPS Measure Mode tag DOES NOT =unknown (and tag actually exists)</td><td>It appears GPS was disabled, or was unable to find a stable lock during this video.</td></tr>
-</tbody></table>
-
-If all validations pass, send to equirectangular frame pipeline.
-
-**Validate HERO mp4 (mode=`hero`)**
-
-<table class="tableizer-table">
-<thead><tr class="tableizer-firstrow"><th>id</th><th>Required</th><th>Error message</th></tr></thead><tbody>
- <tr><td>val-HERO-01</td><td>is mp4</td><td>The following filetype [FILETYPE] is not supported. Please upload only unstitched .mp4s</td></tr>
- <tr><td>val-HERO-02</td><td>>=10 seconds</td><td>The following file [FILE] is not long enough. The minimum video length is 10 seconds</td></tr>
- <tr><td>val-HERO-03</td><td>Has GoPro telemetry:<TrackN:MetaFormat>gpmd</TrackN:MetaFormat>. The Track with MetaFormat=gmpd can be used to identify the telemetry track.</td><td>Your video has no required GoPro telemetry. Are you sure it was shot on a GoPro?</td></tr>
- <tr><td>val-HERO-04</td><td>Video does not have XMP-GSpherical:StitchingSoftware tag</td><td>Your video appears to be 360. Either select a 360 mode, or upload content shot in HERO mode.</td></tr>
- <tr><td>val-HERO-05</td><td>Video does not have XMP-GSpherical:ProjectionType tag</td><td>Your video appears to be 360. Either select a 360 mode, or upload content shot in HERO mode.</td></tr>
- <tr><td>val-HERO-06</td><td>At least one GPS Measure Mode tag DOES NOT =unknown (and tag actually exists)</td><td>It appears GPS was disabled, or was unable to find a stable lock during this video.</td></tr>
-</tbody></table>
-
-If all validations pass, send to HERO frame pipeline.
 
 ## 4. Calculate un-timed GPS points
 
@@ -200,10 +161,9 @@ In this case, we can calculate the final time as follows ([I will use examples f
 
 [See also calculations in excel formulae here](https://docs.google.com/spreadsheets/d/1fj-xZsuu7kk11rgTuyeWlvlo7Psiq_Gz/edit?usp=sharing&ouid=111552983205460555579&rtpof=true&sd=true)
 
-
 ## 5. Create video GPX
 
-A GPX file can then be created using all time, elevation (altitude), latitude, and longitude calculated at step 4.
+A GPX file can then be created using all time, elevation (altitude), latitude, and longitude calculated earlier
 
 ```xml
 <trkseg>
@@ -219,7 +179,7 @@ A GPX file can then be created using all time, elevation (altitude), latitude, a
 
 ## 6. Extract frames at set rate for video type
 
-User can set the ffmpeg `-r` value. Depending on the mode of the video (identified in step 2), we extract like so:
+User can set the ffmpeg `-r` value. Depending on the mode of the video (set by user), we extract like so:
 
 **GoPro EAC .360**
 
@@ -281,7 +241,45 @@ Note, `PPPP` variable is determined by frame ImageWidth:
 * 1568, then `PPPP` = video-3k-mode.txt
 * 2704, then `PPPP` = video-5_2k-mode.txt
 
-## 8. Insert equirectangular metadata to frames
+## 8. Add logo
+
+Skip if option not selected by user.
+
+User should be able to pass flag `-n` at upload with path to a logo file.
+
+Logo file must be:
+
+* .png filetype
+* square dimensions
+* >= 500 px height
+
+### 8A. Add nadir (equirectangular)
+
+User can set nadir overlay size and logo.
+
+To create the nadir, these steps can be followed:
+
+https://www.trekview.org/blog/2021/adding-a-custom-nadir-to-360-video-photo/
+
+_Example of nadir image height (equirectangular)_
+
+![](/docs/example-nadir-percentage-of-pano.jpeg)
+
+Note, nadir convert to equirectangular/resize step only needs to be converted to equirectangular and resized once (as all frames have same dimensions so output can be overlaid over each).
+
+### 8B. Add watermark (HERO)
+
+User can set watermark overlay size and logo.
+
+To create the watermark, these steps can be followed:
+
+https://www.trekview.org/blog/2022/adding-a-custom-watermark-to-hero-photo-video/
+
+_Example of watermark image height (non-equirectangular)_
+
+![](/docs/example-watermark-percentage-of-photo.jpeg)
+
+## 9. Insert equirectangular metadata to frames (equirectangular only)
 
 Skip step 7 if HERO mp4 input
 
@@ -301,9 +299,9 @@ Skip step 7 if HERO mp4 input
 
 Note, some spatial fields are always fixed (e.g. XMP-GPano:SourcePhotosCount b/c GoPro 360 cameras only have 2 lenses), so values are static.
 
-## 9. Assigning time and position
+## 10. Add photo times and add GPS data
 
-### 9A Add photo times
+### 10A Add photo times
 
 #### First frame (all modes)
 
@@ -352,7 +350,7 @@ We therefore explicitly ask use if video was shot in timewarp mode and the setti
 
 To give an example, lets say first photo gets assigned first GPS time = 00:00:01.000 and we extract photos at 5FPS for timewarp mode 30x. in this case second photo has time 00:00:01.000 +6 secs.
 
-### 9B Add GPS points
+### 10B Add GPS points
 
 Now we can use the photo time and GPS positions / times to geotag the photos:
 
@@ -379,7 +377,18 @@ This will write the following fields into the photos
  <tr><td>GPS:GPSAltitude</td><td>157.641 m</td></tr>
 </tbody></table>
 
-## 10. Create sequence json
+## 11. Insert final metadata to frames
+
+<table class="tableizer-table">
+<thead><tr class="tableizer-firstrow"><th>Video metadata field extracted</th><th>Example extracted</th><th>Image metadata field injected</th><th>Example injected</th></tr></thead><tbody>
+ <tr><td>Trackn:DeviceName</td><td>GoPro Max</td><td>IFD0:Model</td><td>GoPro Max</td></tr>
+</tbody></table>
+
+## 12. Create photo GPX
+
+Same as step 5, but now only using GPS points added to photos (not all video points added to photos as more video gps than photos).
+
+## 13. Create sequence json
 
 The sequence JSON holds information about each photo, and its relationship to other photos.
 
@@ -507,7 +516,6 @@ Output is degrees between 0-360.
 
 ### Other sequence json data
 
-
 Other values included in the json include
 
 * `sequence.uuid`: UUID of the sequence
@@ -558,58 +566,78 @@ The sequence JSON has the following structure:
         }
 ```
 
-## 11. Create photo GPX
-
-Same as step 5, but now only using GPS points added to photos (not all video points added to photos as more video gps than photos).
-
-## 12. Insert final metadata to frames
-
-<table class="tableizer-table">
-<thead><tr class="tableizer-firstrow"><th>Video metadata field extracted</th><th>Example extracted</th><th>Image metadata field injected</th><th>Example injected</th></tr></thead><tbody>
- <tr><td>Trackn:DeviceName</td><td>GoPro Max</td><td>IFD0:Model</td><td>GoPro Max</td></tr>
-</tbody></table>
-
-## 13. Add logo (only if user selected)
-
-User should be able to pass flag `-n` at upload with path to a logo file.
-
-Logo file must be:
-
-* .png filetype
-* square dimensions
-* >= 500 px height
-
-### 13A. Add nadir (equirectangular)
-
-User can set nadir overlay size and logo.
-
-To create the nadir, these steps can be followed:
-
-https://www.trekview.org/blog/2021/adding-a-custom-nadir-to-360-video-photo/
-
-_Example of nadir image height (equirectangular)_
-
-![](/docs/example-nadir-percentage-of-pano.jpeg)
-
-Note, nadir convert to equirectangular/resize step only needs to be converted to equirectangular and resized once (as all frames have same dimensions so output can be overlaid over each).
-
-### 13B. Add watermark (HERO)
-
-User can set watermark overlay size and logo.
-
-To create the watermark, these steps can be followed:
-
-https://www.trekview.org/blog/2022/adding-a-custom-watermark-to-hero-photo-video/
-
-_Example of watermark image height (non-equirectangular)_
-
-![](/docs/example-watermark-percentage-of-photo.jpeg)
-
 ### Step 14: Done
 
 You now have:
 
-* a set of geotagged .jpg photos in a directory (`VIDEONAME_DATETIME`/)
-* a video gpx in the same directory (VIDEONAME_video.gpx)
-* a photo gpx (step 6) in the same directory (VIDEONAME_frames.gpx)
-* a sequence json (`VIDEONAME_sequence.json`)
+* a set of geotagged .jpg photos in a directory (`SEQUENCENAME_DATETIME/`)
+* a video gpx in the same directory (`SEQUENCENAME_video.gpx`)
+* a photo gpx (step 6) in the same directory (`SEQUENCENAME_frames.gpx`)
+* a sequence json (`SEQUENCENAME_sequence.json`)
+
+# Image input
+
+## 1. User defines image and script settings
+
+Users sets desired settings and input.
+
+## 2 Validate mode vs photo metadata
+
+In order to process the photo in the correct flow, the following logic is checked against mode input.
+
+**Validate equirectangular jpg (mode=`photo`+`equirectangular`)**
+
+See validations: https://docs.google.com/spreadsheets/d/1x9WnLwPHZIKRyfKkCW2ORVprpsAlA3c2hqVu4S9yIaY/edit#gid=459687648
+
+If all validations pass, send to equirectangular frame pipeline.
+
+**Validate HERO jpg (mode=`photo`+`hero`)**
+
+See validations: https://docs.google.com/spreadsheets/d/1x9WnLwPHZIKRyfKkCW2ORVprpsAlA3c2hqVu4S9yIaY/edit#gid=445373652
+
+If all validations pass, send to HERO frame pipeline.
+
+## 3. Extract metadata from photo
+
+Done using exiftool:
+
+```shell
+$ exiftool -ee -G3 -X IN_PHOTO.jpg > PHOTO_META.xml
+```
+
+## 4. Create photo GPX
+
+A GPX file can then be created using all time, elevation (altitude), latitude.
+
+
+```xml
+<trkseg>
+    <trkpt lat="51.27254444444444" lon="-0.8459694444444444">
+        <ele>82.008</ele>
+        <time>2021-09-04T07:24:07.744000Z</time>
+    </trkpt>
+    <trkpt...
+      ...
+</trkseg>
+
+```
+
+## 5 Create sequence JSON
+
+The sequence JSON holds information about each photo, and its relationship to other photos.
+
+(see video flow for how sequence.json is structured)
+
+## 6. Add logo
+
+Skip if option not selected by user.
+
+(see video flow for how logos are added to photos)
+
+### Step 7: Done
+
+You now have:
+
+* a set of geotagged .jpg photos in a directory (`SEQUENCENAME_DATETIME/`)
+* a photo gpx in the same directory (`SEQUENCENAME_frames.gpx`)
+* a sequence json (`SEQUENCENAME_sequence.json`)
