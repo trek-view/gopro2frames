@@ -1,0 +1,12 @@
+# OS or Editor folders
+*.DS_Store
+
+# tests
+/samples
+
+# venv
+/env
+
+# python
+
+/__pycache__

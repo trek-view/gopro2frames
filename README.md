@@ -2,17 +2,127 @@
 
 Converts GoPro mp4s with equirectangular projections into single frames with correct metadata.
 
+## Explorer
+
+If you don't / can't run this script locally, our cloud product, Explorer, provides almost all of this scripts functionality in a web app.
+
+* [Explorer app](https://explorer.trekview.org/).
+* [Explorer docs](https://guides.trekview.org/explorer/overview).
+
 ## Installation
 
+You must have:
+
+* ffmpeg
+    * by default we bind to default path, so test by running `ffmpeg` in your cli
+* exiftool
+    * by default we bind to default path, so test by running `exiftool` in your cli
+
+Installed on you system.
+
+You can then install the required Trek View components:
+
+This repo:
+
 ```
-pip install -r requirements.txt
+$ git clone https://github.com/trek-view/gopro-frame-maker
+$ cd gopro-frame-maker
+$ git clone https://github.com/trek-view/max2sphere
+$ cd max2sphere
+$ make -f Makefile
+$ cd ..
+$ git clone https://github.com/trek-view/fusion2sphere
+$ cd fusion2sphere
+$ make -f Makefile
+$ cd ..
+```
+
+### Using a virtual environment
+
+To keep things clean on your system, run it in a virtual environment:
+
+```
+$ python3 -m venv env
+$ source env/bin/activate
+$ pip3 install -r requirements.txt
 ```
 
 ## Usage
 
+### Added support to use [config.ini](https://github.com/trek-view/gopro-frame-maker/blob/dev/config.ini) file 
+If using config.ini file only videos (1 video in case of max, and 2 videos in case of fusion) needs to pass as the arguments all other flags will be taken from config.ini
+
+### Options
+
+```
+$ python3 gfm.py VIDEO_NAME.mp4
+```
+
+You can set all opitons in the [`config.ini`] file.
+
+```
+[DEFAULT]
+name=
+mode=
+magick_path=
+ffmpeg_path=
+frame_rate=
+time_warp=
+quality=
+logo_image=
+logo_percentage=
+debug=
+```
+
+* `name`: sequence name
+	* default: none (you must set a value for this)
+	* options: `a-z`,`1-3`,`-`,`_` chars only
+* `mode`: determines input type (and processing steps). Either `equirectangular` for 360 .mp4's, `hero` for normal mp4's, `dualfish` for two Fusion fisheye videos, `eac` for MAX .360 files
+	* default: none (you must set a value for this)
+	* options: `equirectangular`,`hero`,`eac`,`dualfish`
+* `magick_path`: path to imagemagick
+	* default (if left blank): assumes imagemagick is installed globally
+* `ffmpeg_path` (if left blank): path to ffmpeg
+	* default: assumes ffmpeg is installed globally
+* `frame_rate`: sets the frame rate (frames per second) for extraction,
+	* default: `1`
+	* options: `0.1`,`0.2`,`0.5`,`1`,`2`,`3`,`4`,`5`
+* `quality`: sets the extracted quality between 1-6. 1 being the highest quality (but slower processing). This is value used for ffmpeg `-q:v` flag.
+	* default: `1`
+	* options: `1`,`2`,`3`,`4`,`5`,`6`
+* `time_warp`: You NEED to use this if video was shot in timewarp mode, else telemetry will be inaccurate. The script does not support timewarp mode set to Auto (because it's impossible to determine the capture rate). Set the timewarp speed used when shooting in this field
+	* default: blank (not timewarp)
+	* options: `2x`, `5x`, `10x`, `15x`, `30x`
+* `logo_image`: Path to logofile used for nadir / watermark
+	* default: blank (do not add logo)
+* `logo_percentage`: overlay size of nadir / watermark between 8 - 20, in increments of 1.
+	* default: 12 (only used if `logo_image` set)
+* `debug`: enable debug mode.
+	* Default: `FALSE`
+	* options: `TRUE`,`FALSE`
+
+## Test cases
+
+Our suite of test cases can be downloaded here:
+
+* [Valid video files](https://guides.trekview.org/explorer/developer-docs/sequences/upload/good-test-cases)
+
+### Run Tests
+
+All the tests resides in `tests` folder.
+
+To run all the tests, run:
+
+```
+python -m unittest discover tests -p '*_tests.py'
+```
+
 ### Camera support
 
-This video only accepts mp4 videos shot on a GoPro cameras.
+This scripte only accepts videos:
+
+* Must be shot on GoPro camera
+* Must have telemetry (GPS enabled when shooting)
 
 It supports both 360 and non-360 videos. In the case of 360 videos, these must be processed by GoPro Software to final mp4 versions.
 
@@ -25,79 +135,130 @@ This script has currently been tested with the following GoPro cameras:
 * GoPro MAX
 * GoPro Fusion
 
-### Video requirements
-
-* Must be shot on GoPro camera
-* Must have telemetry (GPS enabled when shooting)
-
-### Validation
-
-To ensure the video can be processed, the following checks are applied.
-
-**Determine projection type**
-
-For .mp4 videos we can determine video is spherical (equirectangular) if it contains the following metatag `<XMP-GSpherical:ProjectionType>equirectangular</XMP-GSpherical:ProjectionType>`.
-
-**If contains GoPro telemetry**
-
-Once projection type (360/non-360) has been determined, we next check it contains telemetry from GoPro by identifying the following metatag `<TrackN:MetaFormat>gpmd</TrackN:MetaFormat>`. _Note: TrackN where N = track number, which varies between GoPro cameras._ 
-
-If the script fails any of these checks, you will see an error returned.
+It is very likely that older cameras are also supported, but we provide no support for these as they have not been tested.
 
 ### Logic
 
-[To read how this script works, read this](https://guides.trekview.org/explorer/developer-docs/sequence-functions/process/gopro-video-telemetry).
+The general processing pipeline of gopro-frame-maker is as follows;
 
-### Options
+![](/docs/gopro-frame-maker-video-flow.jpg)
 
-```
-$ gopro-frame-maker.py [options] VIDEO_NAME.mp4
-```
+[Image source here](https://docs.google.com/drawings/d/1i6givGQnGsu7dW2fLt3qVSWaHDiP0TCciY_DtY5_mc4/edit)
 
-Options:
+[To read how this script works in detail, please read this post](/docs/LOGIC.md).
 
-* -r n sets the frame rate (frames per second) for extraction, default: `5`. Options available:
-	* `1`
-	* `2` 
-	* `5`
-* -q n sets the extracted quality between 2-6. 1 being the highest quality (but slower processing), default: 1. This is value used for ffmpeg `-q:v` flag. Options available:
-	* `1`
-	* `2` 
-	* `3`
-	* `4`
-	* `5`
-* - t enables timewarp mode. You NEED to use this if video was shot in timewarp mode, else telemetry will be inaccurate. You must also pass the timewarp mode used. No default
-	* `2x`
-	* `5x`
-	* `10x`
-	* `15x`
-	* `30x`
-* -d enable debug mode, default: false. If flag is passed, will be set to true.
+### Test cases
+
+[A full library of sample files for each camera can be accessed here](https://guides.trekview.org/explorer/developer-docs/sequences/capture).
 
 #### Examples (MacOS)
 
 ##### Extract at a frame rate of 1 FPS
 
 ```
-$ gopro-frame-maker.py -r 1 GS018422.mp4
+[DEFAULT]
+magick_path=
+ffmpeg_path=
+frame_rate= 1
+time_warp=
+quality= 1
+logo_image=
+logo_percentage=
+debug=
+```
+
+```
+$ python3 gfm.py samples/GS018422.mp4
 ```
 
 ##### Run with debug mode
 
 ```
-$ gopro-frame-maker.py -d GS018422.mp4
+[DEFAULT]
+magick_path=
+ffmpeg_path=
+frame_rate= 1
+time_warp=
+quality= 1
+logo_image=
+logo_percentage=
+debug=TRUE
+```
+
+```
+$ python3 gfm.py GS018422.mp4
 ```
 
 ##### Extract frames at lowest quality
 
 ```
-$ gopro-frame-maker.py -q 5 GS018422.mp4
+[DEFAULT]
+magick_path=
+ffmpeg_path=
+frame_rate= 1
+time_warp=
+quality= 6
+logo_image=
+logo_percentage=
+debug=TRUE
+```
+
+```
+$ python3 gfm.py GS018422.mp4
 ```
 
 ##### Extract from a timewarp video shot at 5x speed
 
 ```
-$ gopro-frame-maker.py -t 5x GS018422.mp4
+[DEFAULT]
+magick_path=
+ffmpeg_path=
+frame_rate= 1
+time_warp= 5x
+quality= 1
+logo_image=
+logo_percentage=
+debug=TRUE
+```
+
+```
+$ python3 gfm.py -t 5x GS018422.mp4
+```
+
+##### Use a custom ffmpeg path
+
+```
+[DEFAULT]
+magick_path=
+ffmpeg_path= /Users/dgreenwood/bin/ffmpeg
+frame_rate= 1
+time_warp= 
+quality= 1
+logo_image=
+logo_percentage=
+debug=TRUE
+```
+
+```
+python3 gfm.py GS018422.mp4
+```
+
+##### Add a custom nadir
+
+```
+[DEFAULT]
+magick_path=
+ffmpeg_path=
+frame_rate= 1
+time_warp= 
+quality= 1
+logo_image= /Users/dgreenwood/logo/trekview.png
+logo_percentage= 12
+debug=TRUE
+```
+
+```
+python3 gfm.py -n /Users/dgreenwood/logo/trekview.png -p 12 GS018422.mp4
 ```
 
 ## Support
