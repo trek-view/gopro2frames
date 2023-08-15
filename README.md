@@ -261,12 +261,6 @@ debug=TRUE
 python3 gfm.py -n /Users/dgreenwood/logo/trekview.png -p 12 GS018422.mp4
 ```
 
-## Support
-
-Join our Discord community and get in direct contact with the Trek View team, and the wider Trek View community.
-
-[Join the Trek View Discord server](https://discord.gg/ZVk7h9hCfw).
-
 ## License
 
-The code of this site is licensed under an [MIT License](/LICENSE).
+[Apache 2.0](/LICENSE).
